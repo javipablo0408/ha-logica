@@ -103,10 +103,30 @@ class Bridge:
             self.project, self.ctx, self.engine = project, ctx, eng
             self.last_out = {}; self.first = True
             self.in_map = {}
+            self.virt = {v["id"]: v for v in project.get("virtuals", [])}
             for p in project.get("periphery", []):
-                if p["dir"] == "in": self.in_map.setdefault(p["entity"], []).append(p)
+                if p["dir"] == "in" and not p.get("vid"): self.in_map.setdefault(p["entity"], []).append(p)
             self.out_map = {p["name"]: p for p in project.get("periphery", []) if p["dir"] == "out"}
             for e in self.in_map: self.push_inputs(e, True)
+            for p in project.get("periphery", []):
+                if p.get("vid") and p["dir"] == "in": self._push_virtual(p, True)
+    def _push_virtual(self, p, initial=False):
+        v = self.virt.get(p["vid"]) or {}; val = v.get("value")
+        if v.get("kind") == "color":
+            h = str(val or "#ffffff").lstrip("#"); h = (h + "ffffff")[:6] if len(h) < 6 else h[:6]
+            val = round(int(h[{"r": 0, "g": 2, "b": 4}.get(p.get("role"), 0):][:2], 16) * 100 / 255, 1)
+        elif v.get("kind") == "button": val = 1 if not initial else None
+        if val is None: return
+        self.engine.set_periphery(p["name"], val, initial)
+    def set_virtual(self, vid, value):
+        with self.lock:
+            v = self.virt.get(vid)
+            if v is None: raise KeyError(f"entrada virtual desconocida: {vid} (guarda y despliega primero)")
+            if v.get("kind") != "button": v["value"] = value
+            for p in self.project.get("periphery", []):
+                if p.get("vid") == vid and p["dir"] == "in": self._push_virtual(p)
+            if v.get("kind") != "button":
+                tmp = self.path + ".tmp"; json.dump(self.project, open(tmp, "w"), ensure_ascii=False, indent=1); os.replace(tmp, self.path)
     def save(self, project):
         Engine(project, Ctx())                       # valida (lanza si hay tipo desconocido, etc.)
         with self.lock:
@@ -223,9 +243,9 @@ class Bridge:
         with self.lock:
             return {"connected": self.connected, "dry": self.dry, "cycles": self.engine.ncycles, "err": self.err,
                     "out": {b: o for b, o in self.engine.out.items()}, "last_out": self.last_out,
-                    "calls": list(self.calls)[:30],
-                    "in": {p["name"]: state_value(self.states.get(p["entity"]), p.get("attribute"))
-                           for p in self.project.get("periphery", []) if p["dir"] == "in"}}
+                    "calls": list(self.calls)[:30], "virtual": {k: v.get("value") for k, v in self.virt.items()},
+                    "in": {p["name"]: state_value(self.states.get(p.get("entity")), p.get("attribute"))
+                           for p in self.project.get("periphery", []) if p["dir"] == "in" and not p.get("vid")}}
     def api_entities(self):
         with self.lock:
             return [{"id": e, "name": (s.get("attributes") or {}).get("friendly_name", e), "state": s.get("state"), "domain": e.split(".")[0], "area": self.ent_area.get(e, ""), "device": self.ent_dev.get(e, "")}
@@ -265,6 +285,8 @@ def make_handler(br):
             try:
                 if self.path == "/api/project":
                     br.save(json.loads(body)); return self._send(200, {"ok": True})
+                if self.path == "/api/virtual":
+                    d = json.loads(body); br.set_virtual(d["id"], d.get("value")); return self._send(200, {"ok": True})
                 if self.path == "/api/mode":
                     br.dry = not bool(json.loads(body).get("active")); br.first = True; br.last_out = {}
                     return self._send(200, {"dry": br.dry})

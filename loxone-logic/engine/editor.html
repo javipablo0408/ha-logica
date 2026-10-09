@@ -116,6 +116,12 @@ svg#wires path.tmp{stroke:var(--sel);stroke-dasharray:4 3}
 .rgbn .hd small{color:var(--mute);font-size:10px}
 .rgbn .rw{position:relative;height:20px;line-height:20px;padding-left:16px;font-size:11.5px}
 .rgbn .rw .pin{position:absolute;left:-5px;top:5px;margin:0}
+.rgbn.vout .rw{text-align:right;padding:0 16px 0 0}
+.rgbn.vout .rw .pin{left:auto;right:-5px}
+.ctl{display:flex;flex-wrap:wrap;gap:10px;padding:8px}
+.ctl .w{border:1px solid var(--line);background:var(--chrome2);padding:6px 10px;min-width:190px;display:flex;flex-direction:column;gap:5px;font-size:12px}
+.ctl .w b{font-weight:600}
+.ctl input[type=range]{width:100%}
 .rgbn.sel{outline:2px solid var(--sel);outline-offset:1px}
 .note{background:var(--note);border:1px solid #d6c64d;padding:6px 8px;min-width:120px;min-height:40px;font-size:12px;cursor:move;white-space:pre-wrap;box-shadow:1px 1px 3px #0002}
 #band{position:absolute;border:1px dashed var(--sel);background:#2a7fd422;display:none;pointer-events:none}
@@ -208,7 +214,7 @@ table.pt2 input:hover,table.pt2 input:focus{border-color:var(--line);background:
   </div>
 
   <div id="bottom">
-    <div class="bt"><button data-b="log" class="on">Registro de órdenes</button><button data-b="msg">Mensajes</button><button data-b="mon">Monitor de valores</button><span class="sp"></span><button id="bmin" title="Mostrar / ocultar">▾</button></div>
+    <div class="bt"><button data-b="log" class="on">Registro de órdenes</button><button data-b="msg">Mensajes</button><button data-b="mon">Monitor de valores</button><button data-b="ctl">Control</button><span class="sp"></span><button id="bmin" title="Mostrar / ocultar">▾</button></div>
     <div id="bcont"></div>
   </div>
   <div id="status">
@@ -296,7 +302,9 @@ function toProject(){
   const per=[],wires=[],hw=[];
   S.wires.forEach(w=>{
     const fp=pnById(w.f),tp=pnById(w.t);
-    if(fp&&isB(w.t)){hw.push(w);const q={name:fp.name||fp.entity,dir:"in",target:`${w.t}.${w.tp}`,entity:fp.entity};
+    if(fp&&fp.virt&&isB(w.t)){hw.push(w);const q={name:uniq(fp.virt==="color"?(fp.name||"Color")+"."+w.fp:fp.name||VK[fp.virt]),dir:"in",target:`${w.t}.${w.tp}`,vid:fp.id,role:w.fp};
+      if(fp.virt==="button")q.adapt={pulse:true};per.push(q)}
+    else if(fp&&isB(w.t)){hw.push(w);const q={name:fp.name||fp.entity,dir:"in",target:`${w.t}.${w.tp}`,entity:fp.entity};
       if(fp.attribute)q.attribute=fp.attribute;if(Object.keys(fp.adapt||{}).length)q.adapt=fp.adapt;per.push(q)}
     else if(tp&&tp.rgb&&isB(w.f)){hw.push(w);const q={name:uniq((tp.name||tp.entity)+"."+w.tp),dir:"out",target:`${w.f}.${w.fp}`,entity:tp.entity,group:tp.id,role:w.tp};
       if(w.tp!=="br"&&tp.adapt?.scale_out)q.adapt={scale_out:tp.adapt.scale_out};per.push(q)}
@@ -306,7 +314,7 @@ function toProject(){
   });
   const ui={};S.nodes.forEach(n=>ui[n.id]={x:Math.round(n.x),y:Math.round(n.y),page:n.page});
   return {settings:S.settings,pages:S.pages,blocks,wires,consts:S.consts,periphery:per,ui,
-    ha_nodes:S.pn.map(p=>({...p,x:Math.round(p.x),y:Math.round(p.y)})),ha_wires:hw,notes:S.notes};
+    virtuals:S.pn.filter(p=>p.virt).map(p=>({id:p.id,name:p.name,kind:p.virt,min:p.min,max:p.max,step:p.step,value:live?.virtual&&p.id in live.virtual&&live.virtual[p.id]!=null?live.virtual[p.id]:p.value})),ha_nodes:S.pn.map(p=>({...p,x:Math.round(p.x),y:Math.round(p.y)})),ha_wires:hw,notes:S.notes};
 }
 
 /* ---------- historial ---------- */
@@ -326,7 +334,7 @@ const RIB={
           ["Selección",[["▦","Seleccionar todo",selAll],["✕","Eliminar",delSel,"sel"],["⌕","Buscar (Ctrl+F)",openSearch]]],
           ["Alinear",[["⇤","Izquierda",()=>align("x"),"sel2"],["⇡","Arriba",()=>align("y"),"sel2"],["⇥","Derecha",()=>align("r"),"sel2"]]]],
  programacion:[["Insertar",[["▣","Bloque de función (Ctrl+B)",()=>openPicker("bloque")],["▤","Comentario",addNote],["➕","Página nueva",newPage]]],
-               ["Periferia",[["⇥","Entrada de HA",()=>openPicker("in")],["⇤","Salida de HA",()=>openPicker("out")],["◐","Salida luz RGB",()=>openPicker("rgb")]]],
+               ["Periferia",[["⇥","Entrada de HA",()=>openPicker("in")],["⇤","Salida de HA",()=>openPicker("out")],["◐","Salida luz RGB",()=>openPicker("rgb")]]],["Entradas virtuales",[["⏻","Interruptor",()=>addVirt("switch")],["●","Pulsador",()=>addVirt("button")],["▭","Deslizador",()=>addVirt("slider")],["🎨","Selector de color",()=>addVirt("color")]]],
                ["Página",[["✎","Renombrar",()=>renamePage(cur)],["🗑","Eliminar página",()=>delPage(cur),"pages"]]]],
  monitor:[["Home Assistant",[["▶","Modo activo / simulación",toggleMode,"mode"],["⟳","Recargar entidades",refreshEnt]]],
           ["Monitor",[["◉","Valores en el lienzo",()=>{monitorOn=!monitorOn;lsSet("mon",monitorOn?"1":"0");refreshRibbon();updateLive()},"mon"],["≣","Registro",()=>{bottomTab="log";setBottomMin(false);drawBottom()}]]]]
@@ -388,14 +396,19 @@ function nodeEl(n){
     const pin=el("span","pin"+(S.wires.some(w=>w.f===n.id&&w.fp===abbr)?" cn":""));pin.dataset.node=n.id;pin.dataset.port=abbr;pin.dataset.dir="o";r.appendChild(pin);outs.appendChild(r)});
   return e;
 }
+const VK={switch:"Interruptor",button:"Pulsador",slider:"Deslizador",color:"Selector de color"};
 function pnEl(p){
+  if(p.virt==="color"){const w=el("div","ob pnwrap in rgbn vout");place(w,p);
+    w.innerHTML=`<div class="hd"><span>${esc(p.name||"Color")}</span><small>selector de color</small></div>`;
+    [["r","Rojo"],["g","Verde"],["b","Azul"]].forEach(([k,l])=>{const r=el("div","rw",esc(l));const pin=el("span","pin"+(S.wires.some(x=>x.f===p.id&&x.fp===k)?" cn":""));pin.dataset.node=p.id;pin.dataset.port=k;pin.dataset.dir="o";r.appendChild(pin);w.appendChild(r)});
+    return w}
   if(p.rgb){const w=el("div","ob pnwrap out rgbn");place(w,p);
     w.innerHTML=`<div class="hd"><span title="${esc(p.entity)}">${esc(p.name||p.entity||"(sin entidad)")}</span><small>luz RGB</small></div>`;
     [["r","Rojo"],["g","Verde"],["b","Azul"],["br","Brillo (opcional)"]].forEach(([k,l])=>{const r=el("div","rw",esc(l));const pin=el("span","pin"+(S.wires.some(x=>x.t===p.id&&x.tp===k)?" cn":""));pin.dataset.node=p.id;pin.dataset.port=k;pin.dataset.dir="i";r.appendChild(pin);w.appendChild(r)});
     return w}
   const isIn=p.dir==="in",w=el("div","ob pnwrap "+p.dir);place(w,p);
   const e=el("div","pnode "+p.dir);
-  e.innerHTML=`<span class="nm" title="${esc(p.entity)}">${esc(p.name||p.entity||"(sin entidad)")}</span><small>${esc((p.entity||"").split(".")[0])}</small><span class="lv" data-pv="${p.id}"></span>`;
+  e.innerHTML=`<span class="nm" title="${esc(p.entity)}">${esc(p.name||p.entity||"(sin entidad)")}</span><small>${esc(p.virt?VK[p.virt]:(p.entity||"").split(".")[0])}</small><span class="lv" data-pv="${p.id}"></span>`;
   const pin=el("span","pin"+(S.wires.some(x=>x.f===p.id||x.t===p.id)?" cn":""));pin.dataset.node=p.id;pin.dataset.port="v";pin.dataset.dir=isIn?"o":"i";w.appendChild(e);w.appendChild(pin);return w;
 }
 function noteEl(n){const e=el("div","ob note",esc(n.text||"Comentario"));place(e,n);if(n.w)e.style.width=n.w+"px";e.ondblclick=()=>{const t=prompt("Comentario",n.text||"");if(t!==null){n.text=t;touch();fullRender()}};return e}
@@ -543,6 +556,7 @@ function addBlock(type,at){const p=at||center(),n={id:newId(type),type,name:"",p
 function addHA(dir,entity,at,rgb){const p=at||center(),e=ENT.find(x=>x.id===entity);
   const n={id:"ha"+(nextId++),dir,name:e?.name||entity||"",entity:entity||"",attribute:"",adapt:dir==="in"?{fallback:0}:{},service:"",x:p.x,y:p.y,page:cur};
   if(rgb){n.rgb=true;n.adapt={scale_out:[0,100,0,255]}}S.pn.push(n);touch();fullRender();setSel([n.id])}
+function addVirt(kind,at){const p=at&&at.x!==undefined?at:center(),n={id:"ha"+(nextId++),dir:"in",virt:kind,name:VK[kind],entity:"",attribute:"",adapt:{},value:kind==="switch"?0:kind==="slider"?0:kind==="color"?"#ffffff":null,min:0,max:100,step:1,x:p.x,y:p.y,page:cur};S.pn.push(n);touch();fullRender();setSel([n.id])}
 function addNote(at){const p=(at&&at.x!==undefined)?at:center(),t=prompt("Texto del comentario","");if(t===null)return;const n={id:"n"+(nextId++),text:t,x:p.x,y:p.y,page:cur};S.notes.push(n);touch();fullRender();setSel([n.id])}
 function delSel(){if(!sel.size)return;const ids=sel;S.nodes=S.nodes.filter(n=>!ids.has(n.id));S.pn=S.pn.filter(n=>!ids.has(n.id));S.notes=S.notes.filter(n=>!ids.has(n.id));
   S.wires=S.wires.filter(w=>!ids.has(w.f)&&!ids.has(w.t));Object.keys(S.consts).forEach(k=>{if(ids.has(k.split(".")[0]))delete S.consts[k]});sel=new Set();touch();fullRender()}
@@ -674,7 +688,7 @@ function drawProps(){
   const ps=(c.parameters||[]).filter(x=>showHidden||!x.hide);
   if(ps.length){b.insertAdjacentHTML("beforeend",`<div class="ph">Parámetros</div>`+tbl(ps.map(x=>[(x.lab||x.abbr)+(x.unit?` (${x.unit})`:""),`<input data-p="${esc(x.abbr)}" placeholder="${esc(x.default||"")}" value="${esc(n.params[x.abbr]??"")}">`,`${x.lab?x.abbr+"\n":""}${x.desc||""}${x.range?"\nRango: "+x.range:""}`])));
     b.querySelectorAll("input[data-p]").forEach(i=>i.onchange=()=>{const t=i.value.trim(),k=i.dataset.p;if(t==="")delete n.params[k];else{const v=Number(t.replace(",","."));n.params[k]=isNaN(v)?t:v}touch()})}
-  b.insertAdjacentHTML("beforeend",`<div class="ph">Configuración avanzada (JSON)</div><div style="padding:4px 6px"><textarea id="pcfg" rows="4" style="width:100%" placeholder='opcional; en avisos: {"service":"notify.mobile_app_x","title":"Alarma","message":"Valor <v1>"}'>${n.config?esc(JSON.stringify(n.config,null,1)):""}</textarea></div>`);
+  b.insertAdjacentHTML("beforeend",`<div class="ph">Configuración avanzada (JSON)</div><div style="padding:4px 6px"><textarea id="pcfg" rows="4" style="width:100%" placeholder='${c.category==="Avisos y comunicación"?'{"service":"notify.mobile_app_x","title":"Alarma","message":"Valor <v1>"}':"opcional"}'>${n.config?esc(JSON.stringify(n.config,null,1)):""}</textarea></div>`);
   $("#pcfg").onchange=e=>{const t=e.target.value.trim();try{n.config=t?JSON.parse(t):null;e.target.style.borderColor="";touch()}catch(x){e.target.style.borderColor="var(--bad)"}};
   const d=(l,a)=>{a=a.filter(x=>showHidden||!x.hide);return a.length?`<b>${l}</b><br>`+a.map(x=>`<code>${esc(x.abbr)}</code> ${esc(x.lab||x.name||"")}${x.range?` [${esc(x.range)}]`:""}${x.desc?`<br><span style="color:var(--mute)">${esc(x.desc)}</span>`:""}`).join("<br>")+"<br><br>":""};
   b.insertAdjacentHTML("beforeend",`<div class="ph">Ayuda</div><div class="help" style="user-select:text">${esc(c.descripcion||"")}${c.impl==="stub"?'<br><br><b style="color:var(--warn)">Sin lógica propia:</b> depende de hardware o de un servicio externo; el motor solo mantiene sus entradas/salidas.':""}<br><br>${d("Entradas",c.inputs||[])}${d("Salidas",c.outputs||[])}${c.notas?esc(c.notas)+"<br><br>":""}${c.url?`<a target="_blank" href="${esc(c.url)}">Referencia original ↗</a>`:""}</div>`);
@@ -733,6 +747,13 @@ async function drawCaps(b,p,isIn){
         if(OUT_DOM.has(x.domain)){const bo=el("button","pbtn","↤ Sal.");bo.style.margin="0";bo.onclick=()=>addHA("out",x.id);r.appendChild(bo)}s.appendChild(r)});box.appendChild(s)}}
 }
 function haProps(b,p){
+  if(p.virt){const k=p.virt;
+    b.innerHTML=`<div class="ph">Entrada virtual · ${esc(VK[k])}</div>`+tbl([["Nombre",`<input id="pnm" value="${esc(p.name)}">`],
+      ...(k==="slider"?[["Mínimo",`<input id="pmin" value="${p.min??0}">`],["Máximo",`<input id="pmax" value="${p.max??100}">`],["Paso",`<input id="pstp" value="${p.step??1}">`]]:[])])+
+     `<div class="help">Vive dentro del motor: no hace falta crear nada en Home Assistant. Se maneja desde la pestaña <b>Control</b> del panel inferior. ${k==="button"?"Cada pulsación da un pulso de 1 ciclo.":k==="color"?"Sus salidas R, G y B van de 0 a 100 %.":k==="switch"?"Vale 0 o 1.":"Entrega el valor elegido entre el mínimo y el máximo."}<br><br>Guarda y despliega para que aparezca en Control.</div>`;
+    $("#pnm").onchange=e=>{p.name=e.target.value;touch();fullRender()};
+    [["pmin","min"],["pmax","max"],["pstp","step"]].forEach(([i,key])=>{if($("#"+i))$("#"+i).onchange=e=>{p[key]=Number(String(e.target.value).replace(",","."))||0;touch()}});
+    const d=el("button","pbtn d","Eliminar");d.onclick=delSel;b.appendChild(d);return}
   if(p.rgb){const full=p.adapt?.scale_out?"100":"255";
     b.innerHTML=`<div class="ph">Salida de luz RGB</div>`+tbl([["Luz",`<input id="pe" value="${esc(p.entity)}" placeholder="light.salon">`],["Nombre",`<input id="pnm" value="${esc(p.name)}">`],
       ["Rango de R, G, B",`<select id="prg"><option value="100" ${full==="100"?"selected":""}>0 – 100 %</option><option value="255" ${full==="255"?"selected":""}>0 – 255</option></select>`,"Rango de los valores que llegan a los pines Rojo, Verde y Azul"]])+
@@ -784,9 +805,28 @@ function toast(t,bad){const e=$("#toast");e.textContent=t;e.className=bad?"bad":
 /* ---------- panel inferior ---------- */
 function setBottomMin(m){$("#bottom").classList.toggle("min",m);$("#bmin").textContent=m?"▴":"▾"}
 $("#bmin").onclick=()=>setBottomMin(!$("#bottom").classList.contains("min"));
-document.querySelectorAll(".bt [data-b]").forEach(b=>b.onclick=()=>{bottomTab=b.dataset.b;setBottomMin(false);drawBottom()});
+document.querySelectorAll(".bt [data-b]").forEach(b=>b.onclick=()=>{bottomTab=b.dataset.b;setBottomMin(false);$("#bottom").style.height=bottomTab==="ctl"?"250px":"";drawBottom()});
+let ctlSig="";
+async function putVirt(id,value){try{await api("api/virtual","PUT",{id,value})}catch(x){toast(x.message.includes("desconocida")?"Guarda y despliega primero":x.message,1)}}
+function drawControl(c){
+  const vs=S.pn.filter(p=>p.virt);const sig=JSON.stringify(vs.map(p=>[p.id,p.name,p.virt,p.min,p.max,p.step]));
+  const lv=id=>{const v=live?.virtual?.[id];return v!=null?v:vs.find(p=>p.id===id)?.value};
+  if(sig!==ctlSig||!c.querySelector(".ctl")){ctlSig=sig;
+    if(!vs.length){c.innerHTML='<div class="help">Aquí aparecerán tus entradas virtuales (interruptores, pulsadores, deslizadores y selectores de color). Créalas en la cinta: Programación → Entradas virtuales.</div>';return}
+    c.innerHTML='<div class="ctl"></div>';const box=c.firstChild;
+    vs.forEach(p=>{const w=el("div","w");w.dataset.vid=p.id;w.innerHTML=`<b>${esc(p.name)}</b>`;
+      if(p.virt==="switch"){const i=el("input");i.type="checkbox";i.checked=!!+lv(p.id);i.onchange=()=>putVirt(p.id,i.checked?1:0);w.appendChild(i)}
+      else if(p.virt==="button"){const i=el("button","pbtn","Pulsar");i.style.margin="0";i.onclick=()=>putVirt(p.id,1);w.appendChild(i)}
+      else if(p.virt==="slider"){const i=el("input");i.type="range";i.min=p.min??0;i.max=p.max??100;i.step=p.step??1;i.value=lv(p.id)??0;const t=el("span","",esc(i.value));i.oninput=()=>{t.textContent=i.value};i.onchange=()=>putVirt(p.id,Number(i.value));w.appendChild(i);w.appendChild(t)}
+      else{const i=el("input");i.type="color";i.value=lv(p.id)||"#ffffff";i.style.width="100%";i.onchange=()=>putVirt(p.id,i.value);w.appendChild(i)}
+      box.appendChild(w)});
+  }else{ // actualizar valores sin pisar lo que se está tocando
+    c.querySelectorAll(".w").forEach(w=>{const p=vs.find(x=>x.id===w.dataset.vid),i=w.querySelector("input");if(!p||!i||document.activeElement===i)return;const v=lv(p.id);if(v==null)return;
+      if(p.virt==="switch")i.checked=!!+v;else if(p.virt==="slider"){i.value=v;w.querySelector("span").textContent=v}else if(p.virt==="color")i.value=v})}
+}
 function drawBottom(){
   document.querySelectorAll(".bt [data-b]").forEach(b=>b.classList.toggle("on",b.dataset.b===bottomTab));const c=$("#bcont");
+  if(bottomTab==="ctl"){drawControl(c);return}
   if(bottomTab==="log")c.innerHTML=(live?.calls||[]).map(x=>`<div class="${x.sent?"sent":"sim"}">${esc(x.t)}  ${x.sent?"ENVIADO":"SIMULADO"}  ${esc(x.service)}  ${esc(JSON.stringify(x.data))}  <span style="color:var(--mute)">← ${esc(x.from)}</span></div>`).join("")||"<div>Aún no hay órdenes. En simulación se listan aquí sin enviarse a Home Assistant.</div>";
   else if(bottomTab==="msg")c.innerHTML=msgs.map(m=>`<div class="${m.bad?"er":""}">${esc(m.t)}  ${esc(m.m)}</div>`).join("")||"<div>Sin mensajes.</div>";
   else{const rows=[];S.nodes.forEach(n=>{const o=live?.out?.[n.id]||{};Object.entries(o).forEach(([k,v])=>rows.push(`<div>${esc(n.name||n.id)}.${esc(k)} = ${esc(typeof v==="object"?JSON.stringify(v):v)}</div>`))});c.innerHTML=rows.join("")||"<div>Sin datos.</div>"}

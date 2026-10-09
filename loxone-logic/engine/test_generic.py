@@ -64,3 +64,19 @@ def test_rgb_group_single_call():
     ons = [c for c in b.calls if c["service"] == "light.turn_on"]
     assert ons and ons[-1]["data"]["rgb_color"] == [255, 128, 0], list(b.calls)
     assert all(c["service"].startswith("light.") for c in b.calls)
+
+def test_virtual_inputs():
+    sc = {"V1": 0, "Sv1": 0, "V2": 1, "Sv2": 1}
+    p = {"blocks": [{"id": "s", "type": "scaler", "params": sc}, {"id": "c", "type": "scaler", "params": sc}],
+         "wires": [], "consts": {}, "settings": {},
+         "virtuals": [{"id": "v1", "name": "Nivel", "kind": "slider", "value": 30}, {"id": "v2", "name": "Color", "kind": "color", "value": "#ff0000"}],
+         "periphery": [{"name": "Nivel", "dir": "in", "target": "s.V", "vid": "v1", "role": "v"},
+                       {"name": "Color.r", "dir": "in", "target": "c.V", "vid": "v2", "role": "r"}]}
+    b = Bridge(p, "/tmp/_t3.json", dry=True)
+    b.engine.cycle(1.0)
+    assert b.engine.out["s"]["Sv"] == 30 and b.engine.out["c"]["Sv"] == 100
+    b.set_virtual("v1", 70); b.set_virtual("v2", "#000000"); b.engine.cycle(1.0)
+    assert b.engine.out["s"]["Sv"] == 70 and b.engine.out["c"]["Sv"] == 0
+    assert b.api_live()["virtual"] == {"v1": 70, "v2": "#000000"}
+    try: b.set_virtual("nope", 1); assert False
+    except KeyError: pass
