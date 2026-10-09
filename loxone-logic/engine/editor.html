@@ -755,6 +755,10 @@ async function drawCaps(b,p,isIn){
         const bi=el("button","pbtn","↦ Ent.");bi.style.margin="0";bi.onclick=()=>addHA("in",x.id);r.appendChild(bi);
         if(OUT_DOM.has(x.domain)){const bo=el("button","pbtn","↤ Sal.");bo.style.margin="0";bo.onclick=()=>addHA("out",x.id);r.appendChild(bo)}s.appendChild(r)});box.appendChild(s)}}
 }
+const sj=o=>JSON.stringify(o,(k,v)=>v&&typeof v==="object"&&!Array.isArray(v)?Object.fromEntries(Object.entries(v).sort()):v);
+function profIdx(p,isIn,P){
+  return P.findIndex(([,v])=>isIn?((p.attribute||"")===(v.attribute||"")&&sj(p.adapt||{})===sj(v.adapt||{}))
+    :((p.service||"")===(v.service||"")&&sj(p.service_data||null)===sj(v.service_data||null)&&(p.service_when||"")===(v.service_when||"")&&sj(p.adapt||{})===sj(v.adapt||{})))}
 function haProps(b,p){
   if(p.virt){const k=p.virt;
     b.innerHTML=`<div class="ph">Entrada virtual · ${esc(VK[k])}</div>`+tbl([["Nombre",`<input id="pnm" value="${esc(p.name)}">`],
@@ -772,10 +776,10 @@ function haProps(b,p){
     $("#prg").onchange=e=>{p.adapt=e.target.value==="100"?{scale_out:[0,100,0,255]}:{};touch()};
     const d=el("button","pbtn d","Eliminar");d.onclick=delSel;b.appendChild(d);return}
   const isIn=p.dir==="in",a=p.adapt||(p.adapt={}),P=isIn?PROF_IN:PROF_OUT;
-  const dsj=p.service_data?JSON.stringify(p.service_data):"";
+  const dsj=p.service_data?JSON.stringify(p.service_data):"",pi=profIdx(p,isIn,P);
   b.innerHTML=`<div class="ph">${isIn?"Entrada de Home Assistant":"Salida de Home Assistant"}</div>`+tbl([
     ["Entidad",`<input id="pe" value="${esc(p.entity)}" placeholder="light.salon">`],["Nombre",`<input id="pnm" value="${esc(p.name)}">`],
-    ["Perfil",`<select id="ppf"><option value="-1">— elegir para rellenar —</option>${P.map((x,i)=>`<option value="${i}">${esc(x[0])}</option>`).join("")}</select>`,"Rellena los campos de abajo para el tipo de dispositivo"],
+    ["Perfil",`<select id="ppf"><option value="-1">${pi<0?"Personalizado (ajustado a mano)":"— cambiar perfil —"}</option>${P.map((x,i)=>`<option value="${i}" ${i===pi?"selected":""}>${esc(x[0])}</option>`).join("")}</select>`,"Perfil activo: rellena los campos de abajo para el tipo de dispositivo. Si los cambias a mano pasa a «Personalizado»."],
     ...(isIn?[["Atributo",`<input id="pat" value="${esc(p.attribute||"")}" placeholder="vacío = estado">`,"Si lo rellenas, lee ese atributo (p.ej. temperature)"]]
       :[["Servicio",`<input id="psv" value="${esc(p.service||"")}" placeholder="auto">`,"dominio.servicio; vacío = según el dominio"],
         ["Datos (JSON)",`<input id="psd" value="${esc(dsj)}" placeholder='{"campo":"{v}"}'>`,"Datos extra del servicio; {v} = valor del bloque"],
