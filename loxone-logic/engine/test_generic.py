@@ -110,3 +110,13 @@ def test_simulate_input():
     b.simulate("event.x_action", "single"); b.engine.cycle(1.0)
     assert b.engine.out["_pt0"]["Sv"] == 1
     b.engine.cycle(1.0); assert b.engine.out["_pt0"]["Sv"] == 0
+
+def test_pulse_ignores_attribute_only_updates():
+    p = {"blocks": [{"id": "_pt0", "type": "scaler", "params": {"V1": 0, "Sv1": 0, "V2": 1, "Sv2": 1}}], "wires": [], "consts": {}, "settings": {},
+         "periphery": [{"name": "btn", "dir": "in", "target": "_pt0.V", "entity": "sensor.x", "adapt": {"pulse": True, "equals": "single"}}]}
+    b = Bridge(p, "/tmp/_t6.json", dry=True)
+    b.states["sensor.x"] = {"state": "single"}
+    b.push_inputs("sensor.x", same_state=True); b.engine.cycle(1.0)
+    assert b.engine.out["_pt0"]["Sv"] == 0
+    b.push_inputs("sensor.x"); b.engine.cycle(1.0)
+    assert b.engine.out["_pt0"]["Sv"] == 1

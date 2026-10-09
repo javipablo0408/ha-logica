@@ -143,8 +143,10 @@ class Bridge:
             tmp = self.path + ".tmp"; json.dump(project, open(tmp, "w"), ensure_ascii=False, indent=1); os.replace(tmp, self.path)
             self.load(project)
     def nid(self): self.mid += 1; return self.mid
-    def push_inputs(self, entity, initial=False):
+    def push_inputs(self, entity, initial=False, same_state=False):
         for p in self.in_map.get(entity, []):
+            # un pulsador (pulso) solo reacciona cuando cambia el ESTADO, no cuando HA actualiza atributos con el mismo estado
+            if same_state and (p.get("adapt") or {}).get("pulse") and not p.get("attribute"): continue
             self.engine.set_periphery(p["name"], state_value(self.states.get(entity), p.get("attribute")), initial)
     # ---------- HA
     async def call(self, ws, dom, srv, data, name):
@@ -242,8 +244,10 @@ class Bridge:
                     elif m.get("type") == "event":
                         d = m["event"]["data"]; e = d["entity_id"]
                         with self.lock:
-                            self.states[e] = d["new_state"]
-                            if e in self.in_map: self.push_inputs(e)
+                            old = self.states.get(e); new = d["new_state"]
+                            same = bool(old and new and old.get("state") == new.get("state") and not e.startswith("event."))
+                            self.states[e] = new
+                            if e in self.in_map: self.push_inputs(e, same_state=same)
             finally:
                 self.connected = False
                 if task: task.cancel()
