@@ -173,7 +173,8 @@ class Bridge:
                             for k, v in self.ha_cfg.items():
                                 if v is not None and k not in self.project.get("settings", {}): setattr(self.ctx, k, v)
                     elif m.get("id") in (aid, eid, did) and m.get("type") == "result":
-                        reg[m["id"]] = m.get("result") or []
+                        if not m.get("success"): print("registro no disponible (sin áreas):", m.get("error"), flush=True)
+                        reg[m["id"]] = (m.get("result") or []) if m.get("success") else []
                         if len(reg) == 3:
                             areas = {a["area_id"]: a["name"] for a in reg[aid]}
                             dev = {d["id"]: d.get("area_id") for d in reg[did]}
@@ -181,6 +182,7 @@ class Bridge:
                                 self.ent_area = {e["entity_id"]: areas.get(e.get("area_id") or dev.get(e.get("device_id")), "")
                                                  for e in reg[eid]}
                     elif m.get("id") == gid and m.get("type") == "result":
+                        if not m.get("success"): raise OSError(f"get_states falló: {m.get('error')}")
                         with self.lock:
                             for st in m["result"]: self.states[st["entity_id"]] = st
                             for e in self.in_map: self.push_inputs(e, True)
