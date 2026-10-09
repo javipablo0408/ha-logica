@@ -41,3 +41,25 @@ def test_ui_catalog_covers_all_and_no_loxone_leftovers():
         if u.get("hide"): continue
         for txt in [u["name"], u["category"]] + [v.get("label", "") for sec in ("inputs", "outputs", "params") for v in u.get(sec, {}).values() if not v.get("hide")]:
             assert not bad.search(txt or ""), (k, txt)
+
+def test_rgb_group_single_call():
+    import asyncio
+    from ha_bridge import rgb_for
+    assert rgb_for("light.x", {"r": 255, "g": 0, "b": 128})[2]["rgb_color"] == [255, 0, 128]
+    assert rgb_for("light.x", {"r": 0, "g": 0, "b": 0})[1] == "turn_off"
+    assert rgb_for("light.x", {"r": 9, "g": 9, "b": 9, "br": 0})[1] == "turn_off"
+    sc = {"V1": 0, "Sv1": 0, "V2": 1, "Sv2": 1}
+    blocks = [{"id": k, "type": "scaler", "params": sc} for k in "rgb"]
+    per = [{"name": f"in_{k}", "dir": "in", "target": f"{k}.V", "entity": f"sensor.{k}"} for k in "rgb"]
+    per += [{"name": f"Luz.{k}", "dir": "out", "target": f"{k}.Sv", "entity": "light.ida", "group": "ha1", "role": k, "adapt": {"scale_out": [0, 100, 0, 255]}} for k in "rgb"]
+    b = Bridge({"blocks": blocks, "wires": [], "consts": {}, "periphery": per, "settings": {}}, "/tmp/_t2.json", dry=True)
+    hb.CYCLE = 0.02
+    async def go():
+        t = asyncio.create_task(b.loop(None)); await asyncio.sleep(0.1)
+        for k, v in zip("rgb", (100, 50, 0)):
+            b.states[f"sensor.{k}"] = {"state": str(v)}; b.push_inputs(f"sensor.{k}")
+        await asyncio.sleep(0.15); t.cancel()
+    asyncio.run(go())
+    ons = [c for c in b.calls if c["service"] == "light.turn_on"]
+    assert ons and ons[-1]["data"]["rgb_color"] == [255, 128, 0], list(b.calls)
+    assert all(c["service"].startswith("light.") for c in b.calls)

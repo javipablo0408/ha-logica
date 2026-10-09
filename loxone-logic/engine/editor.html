@@ -111,6 +111,12 @@ svg#wires path.tmp{stroke:var(--sel);stroke-dasharray:4 3}
 .pnwrap .pin{position:absolute;top:8px;margin:0}
 .pnwrap.in .pin{right:-5px} .pnwrap.out .pin{left:-5px}
 .pnwrap{position:absolute}
+.rgbn{background:var(--out);border:1px solid var(--outb);min-width:170px;cursor:move}
+.rgbn .hd{padding:4px 10px;font-size:12px;border-bottom:1px solid var(--outb);display:flex;gap:8px;justify-content:space-between}
+.rgbn .hd small{color:var(--mute);font-size:10px}
+.rgbn .rw{position:relative;height:20px;line-height:20px;padding-left:16px;font-size:11.5px}
+.rgbn .rw .pin{position:absolute;left:-5px;top:5px;margin:0}
+.rgbn.sel{outline:2px solid var(--sel);outline-offset:1px}
 .note{background:var(--note);border:1px solid #d6c64d;padding:6px 8px;min-width:120px;min-height:40px;font-size:12px;cursor:move;white-space:pre-wrap;box-shadow:1px 1px 3px #0002}
 #band{position:absolute;border:1px dashed var(--sel);background:#2a7fd422;display:none;pointer-events:none}
 #zoomc{position:absolute;right:12px;bottom:10px;display:flex;gap:2px;background:var(--chrome);border:1px solid var(--line);border-radius:4px;padding:2px}
@@ -272,6 +278,9 @@ function fromProject(p){
       if(q.dir==="in"){const key=q.name+"|"+q.entity+"|"+(q.attribute||"");let pn=inG[key];
         if(!pn){pn={id:"ha"+(nextId++),dir:"in",name:q.name,entity:q.entity,attribute:q.attribute||"",adapt:q.adapt||{},x:-300,y:(cy+=72),page:pageOf(tb)||pg0};inG[key]=pn;S.pn.push(pn)}
         S.wires.push({f:pn.id,fp:"v",t:tb,tp:tpt});
+      }else if(q.group){let pn=S.pn.find(x=>x.rgb&&x.gid===q.group);
+        if(!pn){pn={id:"ha"+(nextId++),gid:q.group,rgb:true,dir:"out",name:q.entity,entity:q.entity,attribute:"",adapt:q.adapt||{},x:900,y:(cy+=110),page:pageOf(tb)||pg0};S.pn.push(pn)}
+        S.wires.push({f:tb,fp:tpt,t:pn.id,tp:q.role})
       }else{const pn={id:"ha"+(nextId++),dir:"out",name:q.name,entity:q.entity,attribute:"",service:q.service||"",adapt:q.adapt||{},service_data:q.service_data||null,service_when:q.service_when||"",x:900,y:(cy+=72),page:pageOf(tb)||pg0};
         S.pn.push(pn);S.wires.push({f:tb,fp:tpt,t:pn.id,tp:"v"})}
     });
@@ -289,6 +298,8 @@ function toProject(){
     const fp=pnById(w.f),tp=pnById(w.t);
     if(fp&&isB(w.t)){hw.push(w);const q={name:fp.name||fp.entity,dir:"in",target:`${w.t}.${w.tp}`,entity:fp.entity};
       if(fp.attribute)q.attribute=fp.attribute;if(Object.keys(fp.adapt||{}).length)q.adapt=fp.adapt;per.push(q)}
+    else if(tp&&tp.rgb&&isB(w.f)){hw.push(w);const q={name:uniq((tp.name||tp.entity)+"."+w.tp),dir:"out",target:`${w.f}.${w.fp}`,entity:tp.entity,group:tp.id,role:w.tp};
+      if(w.tp!=="br"&&tp.adapt?.scale_out)q.adapt={scale_out:tp.adapt.scale_out};per.push(q)}
     else if(tp&&isB(w.f)){hw.push(w);const q={name:uniq(tp.name||tp.entity),dir:"out",target:`${w.f}.${w.fp}`,entity:tp.entity};
       if(tp.service)q.service=tp.service;if(tp.service_data)q.service_data=tp.service_data;if(tp.service_when)q.service_when=tp.service_when;if(Object.keys(tp.adapt||{}).length)q.adapt=tp.adapt;per.push(q)}
     else if(isB(w.f)&&isB(w.t))wires.push([`${w.f}.${w.fp}`,`${w.t}.${w.tp}`]);
@@ -315,7 +326,7 @@ const RIB={
           ["Selección",[["▦","Seleccionar todo",selAll],["✕","Eliminar",delSel,"sel"],["⌕","Buscar (Ctrl+F)",openSearch]]],
           ["Alinear",[["⇤","Izquierda",()=>align("x"),"sel2"],["⇡","Arriba",()=>align("y"),"sel2"],["⇥","Derecha",()=>align("r"),"sel2"]]]],
  programacion:[["Insertar",[["▣","Bloque de función (Ctrl+B)",()=>openPicker("bloque")],["▤","Comentario",addNote],["➕","Página nueva",newPage]]],
-               ["Periferia",[["⇥","Entrada de HA",()=>openPicker("in")],["⇤","Salida de HA",()=>openPicker("out")]]],
+               ["Periferia",[["⇥","Entrada de HA",()=>openPicker("in")],["⇤","Salida de HA",()=>openPicker("out")],["◐","Salida luz RGB",()=>openPicker("rgb")]]],
                ["Página",[["✎","Renombrar",()=>renamePage(cur)],["🗑","Eliminar página",()=>delPage(cur),"pages"]]]],
  monitor:[["Home Assistant",[["▶","Modo activo / simulación",toggleMode,"mode"],["⟳","Recargar entidades",refreshEnt]]],
           ["Monitor",[["◉","Valores en el lienzo",()=>{monitorOn=!monitorOn;lsSet("mon",monitorOn?"1":"0");refreshRibbon();updateLive()},"mon"],["≣","Registro",()=>{bottomTab="log";setBottomMin(false);drawBottom()}]]]]
@@ -378,6 +389,10 @@ function nodeEl(n){
   return e;
 }
 function pnEl(p){
+  if(p.rgb){const w=el("div","ob pnwrap out rgbn");place(w,p);
+    w.innerHTML=`<div class="hd"><span title="${esc(p.entity)}">${esc(p.name||p.entity||"(sin entidad)")}</span><small>luz RGB</small></div>`;
+    [["r","Rojo"],["g","Verde"],["b","Azul"],["br","Brillo (opcional)"]].forEach(([k,l])=>{const r=el("div","rw",esc(l));const pin=el("span","pin"+(S.wires.some(x=>x.t===p.id&&x.tp===k)?" cn":""));pin.dataset.node=p.id;pin.dataset.port=k;pin.dataset.dir="i";r.appendChild(pin);w.appendChild(r)});
+    return w}
   const isIn=p.dir==="in",w=el("div","ob pnwrap "+p.dir);place(w,p);
   const e=el("div","pnode "+p.dir);
   e.innerHTML=`<span class="nm" title="${esc(p.entity)}">${esc(p.name||p.entity||"(sin entidad)")}</span><small>${esc((p.entity||"").split(".")[0])}</small><span class="lv" data-pv="${p.id}"></span>`;
@@ -443,7 +458,7 @@ vw.addEventListener("mousedown",ev=>{
   if(id){
     if(ev.shiftKey||ev.ctrlKey){const s=new Set(sel);s.has(id)?s.delete(id):s.add(id);setSel(s);return}
     if(!sel.has(id))setSel([id]);
-    if(ev.target.closest(".h,.pnode,.note"))startDrag(ev);
+    if(ev.target.closest(".h,.pnode,.rgbn,.note"))startDrag(ev);
     return;
   }
   wsel=-1;paintWires();startBand(ev);
@@ -525,8 +540,9 @@ function center(){const r=vw.getBoundingClientRect();let x=snap((r.width/2-view.
   const hit=(a,b)=>a.x<b.x+b.w+12&&a.x+170>b.x&&a.y<b.y+b.h+12&&a.y+110>b.y;
   for(let i=0;i<80&&boxes.some(b=>hit({x,y},b));i++){x+=G*3;if(i%8==7){x-=G*24;y+=G*5}}return {x,y}}
 function addBlock(type,at){const p=at||center(),n={id:newId(type),type,name:"",params:{},config:null,x:p.x,y:p.y,page:cur};S.nodes.push(n);touch();fullRender();setSel([n.id])}
-function addHA(dir,entity,at){const p=at||center(),e=ENT.find(x=>x.id===entity);
-  const n={id:"ha"+(nextId++),dir,name:e?.name||entity||"",entity:entity||"",attribute:"",adapt:dir==="in"?{fallback:0}:{},service:"",x:p.x,y:p.y,page:cur};S.pn.push(n);touch();fullRender();setSel([n.id])}
+function addHA(dir,entity,at,rgb){const p=at||center(),e=ENT.find(x=>x.id===entity);
+  const n={id:"ha"+(nextId++),dir,name:e?.name||entity||"",entity:entity||"",attribute:"",adapt:dir==="in"?{fallback:0}:{},service:"",x:p.x,y:p.y,page:cur};
+  if(rgb){n.rgb=true;n.adapt={scale_out:[0,100,0,255]}}S.pn.push(n);touch();fullRender();setSel([n.id])}
 function addNote(at){const p=(at&&at.x!==undefined)?at:center(),t=prompt("Texto del comentario","");if(t===null)return;const n={id:"n"+(nextId++),text:t,x:p.x,y:p.y,page:cur};S.notes.push(n);touch();fullRender();setSel([n.id])}
 function delSel(){if(!sel.size)return;const ids=sel;S.nodes=S.nodes.filter(n=>!ids.has(n.id));S.pn=S.pn.filter(n=>!ids.has(n.id));S.notes=S.notes.filter(n=>!ids.has(n.id));
   S.wires=S.wires.filter(w=>!ids.has(w.f)&&!ids.has(w.t));Object.keys(S.consts).forEach(k=>{if(ids.has(k.split(".")[0]))delete S.consts[k]});sel=new Set();touch();fullRender()}
@@ -607,7 +623,7 @@ vw.addEventListener("drop",e=>{e.preventDefault();const t=e.dataTransfer.getData
 
 /* ---------- selector modal (insertar / buscar) ---------- */
 let pickMode="bloque",pickAt=null,pickCat="";
-function openPicker(mode,at){pickMode=mode;pickAt=at&&at.x!==undefined?at:null;pickCat="";$("#mt").textContent=mode==="bloque"?"Insertar bloque de función":mode==="in"?"Entrada de Home Assistant":mode==="out"?"Salida de Home Assistant":"Buscar en el proyecto";
+function openPicker(mode,at){pickMode=mode;pickAt=at&&at.x!==undefined?at:null;pickCat="";$("#mt").textContent=mode==="bloque"?"Insertar bloque de función":mode==="in"?"Entrada de Home Assistant":mode==="out"?"Salida de Home Assistant":mode==="rgb"?"Salida de luz RGB (elige una luz)":"Buscar en el proyecto";
   $("#modal").style.display="flex";$("#mq").value="";$("#mq").focus();drawPicker()}
 function openSearch(){openPicker("buscar")}
 function closeModal(){$("#modal").style.display="none"}
@@ -628,8 +644,8 @@ function drawPicker(){
         const d=el("div","it",`<span>${esc(r.t)}</span><small>${esc(r.s)} · ${esc(pg)}</small>`);d.onclick=()=>{closeModal();if(r.o.page!==cur){cur=r.o.page;fullRender()}setSel([r.o.id]);view.x=vw.clientWidth/2-r.o.x*view.k-80;view.y=vw.clientHeight/2-r.o.y*view.k-40;applyView();drawWires()};ml.appendChild(d)});
   }else{
     mc.innerHTML='<div class="it" style="cursor:default">Entidades</div>';
-    ENT.filter(e=>(pickMode==="in"||OUT_DOM.has(e.domain))&&(!q||(e.id+e.name+e.area+(e.device||"")).toLowerCase().includes(q))).slice(0,300)
-     .forEach(e=>{const d=el("div","it",`<span>${esc(e.name)}</span><small>${esc(e.id)}${e.device?" · "+esc(e.device):e.area?" · "+esc(e.area):""}</small>`);d.onclick=()=>{closeModal();addHA(pickMode,e.id,pickAt)};ml.appendChild(d)});
+    ENT.filter(e=>(pickMode==="in"||(pickMode==="rgb"?e.domain==="light":OUT_DOM.has(e.domain)))&&(!q||(e.id+e.name+e.area+(e.device||"")).toLowerCase().includes(q))).slice(0,300)
+     .forEach(e=>{const d=el("div","it",`<span>${esc(e.name)}</span><small>${esc(e.id)}${e.device?" · "+esc(e.device):e.area?" · "+esc(e.area):""}</small>`);d.onclick=()=>{closeModal();addHA(pickMode==="rgb"?"out":pickMode,e.id,pickAt,pickMode==="rgb")};ml.appendChild(d)});
   }
 }
 
@@ -696,6 +712,14 @@ const PROF_OUT=[
  ["Servicio personalizado",{},"Rellena «Servicio» (dominio.servicio) y los datos en JSON; {v} se sustituye por el valor del bloque."],
 ];
 function haProps(b,p){
+  if(p.rgb){const full=p.adapt?.scale_out?"100":"255";
+    b.innerHTML=`<div class="ph">Salida de luz RGB</div>`+tbl([["Luz",`<input id="pe" value="${esc(p.entity)}" placeholder="light.salon">`],["Nombre",`<input id="pnm" value="${esc(p.name)}">`],
+      ["Rango de R, G, B",`<select id="prg"><option value="100" ${full==="100"?"selected":""}>0 – 100 %</option><option value="255" ${full==="255"?"selected":""}>0 – 255</option></select>`,"Rango de los valores que llegan a los pines Rojo, Verde y Azul"]])+
+     `<div class="help">Los tres colores se envían juntos en una sola orden <code>light.turn_on</code> con <code>rgb_color</code>. Con R=G=B=0 la luz se apaga. El pin «Brillo» (0–100 %) es opcional: si no lo conectas, el brillo lo da el propio color.</div>`;
+    entityPicker($("#pe"),e=>{p.entity=e.id;if(!p.name||p.name===p.entity)p.name=e.name;touch();fullRender()},true);
+    $("#pe").onchange=e=>{p.entity=e.target.value.trim();touch();fullRender()};$("#pnm").onchange=e=>{p.name=e.target.value;touch();fullRender()};
+    $("#prg").onchange=e=>{p.adapt=e.target.value==="100"?{scale_out:[0,100,0,255]}:{};touch()};
+    const d=el("button","pbtn d","Eliminar");d.onclick=delSel;b.appendChild(d);return}
   const isIn=p.dir==="in",a=p.adapt||(p.adapt={}),P=isIn?PROF_IN:PROF_OUT;
   const dsj=p.service_data?JSON.stringify(p.service_data):"";
   b.innerHTML=`<div class="ph">${isIn?"Entrada de Home Assistant":"Salida de Home Assistant"}</div>`+tbl([
@@ -726,6 +750,7 @@ function haProps(b,p){
   if($("#pfb"))$("#pfb").onchange=e=>{const t=e.target.value.trim();t===""?delete a.fallback:a.fallback=isNaN(Number(t))?t:Number(t);touch()};
   $("#psc").onchange=e=>{const t=e.target.value.trim(),k=isIn?"scale":"scale_out";if(!t){delete a[k];e.target.style.borderColor="";touch();return}
     try{const v=JSON.parse(t);if(!Array.isArray(v)||v.length!==4)throw 0;a[k]=v;e.target.style.borderColor="";touch()}catch(x){e.target.style.borderColor="var(--bad)"}};
+  if(!isIn&&p.entity.startsWith("light.")){const cv=el("button","pbtn","Convertir en salida RGB (3 pines)");cv.onclick=()=>{S.wires=S.wires.filter(w=>w.t!==p.id);p.rgb=true;p.adapt={scale_out:[0,100,0,255]};p.service="";p.service_data=null;p.service_when="";touch();fullRender();setSel([p.id])};b.appendChild(cv)}
   const d=el("button","pbtn d","Eliminar");d.onclick=delSel;b.appendChild(d);
 }
 

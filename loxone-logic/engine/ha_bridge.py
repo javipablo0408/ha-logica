@@ -47,6 +47,16 @@ def service_for(entity, value, explicit=None, data=None):
     if dom in ("button", "input_button"): return t("press") if v else None
     return None
 
+def rgb_for(entity, vals):
+    """Canales r,g,b (0-255) y brillo opcional (0-100) -> una sola llamada light.* ."""
+    c = lambda x: int(max(0, min(255, round(float(x or 0)))))
+    r, g, b = c(vals.get("r")), c(vals.get("g")), c(vals.get("b"))
+    br = vals.get("br")
+    if (r, g, b) == (0, 0, 0) or (br is not None and float(br or 0) <= 0): return ("light", "turn_off", {"entity_id": entity})
+    d = {"entity_id": entity, "rgb_color": [r, g, b]}
+    if br is not None: d["brightness_pct"] = int(max(1, min(100, round(float(br)))))
+    return ("light", "turn_on", d)
+
 def state_value(st, attribute=None):
     if st is None: return None
     if attribute: return (st.get("attributes") or {}).get(attribute)
@@ -132,15 +142,20 @@ class Bridge:
                 self.ctx.now = dt.datetime.now() - dt.timedelta(seconds=dtc)
                 try: outs = self.engine.cycle(dtc); self.err = None
                 except Exception as e: outs = {}; self.err = f"{type(e).__name__}: {e}"
+                dirty = set()
                 for name, val in outs.items():
                     if self.last_out.get(name) == val: continue
                     first_seen = name not in self.last_out
                     self.last_out[name] = val
                     if self.first and first_seen: continue        # no empuja el estado inicial a HA
                     p = self.out_map[name]
+                    if p.get("group"): dirty.add(p["group"]); continue
                     if p.get("service_when") == "rise" and not val: continue
                     c = service_for(p["entity"], val, p.get("service"), p.get("service_data"))
                     if c: pending.append((c, name))
+                for g in dirty:
+                    mem = [q for q in self.out_map.values() if q.get("group") == g]
+                    pending.append((rgb_for(mem[0]["entity"], {q["role"]: self.last_out.get(q["name"]) for q in mem}), g))
                 self.first = False
                 for ev in self.ctx.events:
                     c = self.notify_call(ev)
