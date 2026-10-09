@@ -333,7 +333,7 @@ function undo(d){const n=hi+d;if(n<0||n>=hist.length)return;hi=n;const o=JSON.pa
 const RIB={
  proyecto:[["Proyecto",[["💾","Guardar y desplegar",()=>save(),"save"],["↶","Deshacer",()=>undo(-1),"undo"],["↷","Rehacer",()=>undo(1),"redo"]]],
            ["Archivo",[["⭳","Exportar",exportJson],["⭱","Importar",importJson]]],
-           ["Vista",[["◐","Tema claro/oscuro",toggleTheme],["⛶","Encuadrar todo",fit]]]],
+           ["Vista",[["📱","Abrir la app",()=>window.open("app","_blank")],["◐","Tema claro/oscuro",toggleTheme],["⛶","Encuadrar todo",fit]]]],
  edicion:[["Portapapeles",[["✂","Cortar",()=>{copySel();delSel()},"sel"],["⧉","Copiar",copySel,"sel"],["⎘","Pegar",paste,"paste"]]],
           ["Selección",[["▦","Seleccionar todo",selAll],["✕","Eliminar",delSel,"sel"],["⌕","Buscar (Ctrl+F)",openSearch]]],
           ["Alinear",[["⇤","Izquierda",()=>align("x"),"sel2"],["⇡","Arriba",()=>align("y"),"sel2"],["⇥","Derecha",()=>align("r"),"sel2"]]]],
@@ -684,7 +684,7 @@ function drawProps(){
     [["plat","lat"],["plon","lon"],["ptz","tz"]].forEach(([i,k])=>$("#"+i).onchange=e=>{const t=e.target.value.trim();if(t==="")delete S.settings[k];else S.settings[k]=k==="tz"?t:Number(t.replace(",","."));touch()});return}
   if(nt){b.innerHTML=`<div class="ph">Comentario</div><div style="padding:6px"><textarea id="nt" rows="6" style="width:100%">${esc(nt.text||"")}</textarea></div>`;$("#nt").onchange=e=>{nt.text=e.target.value;touch();fullRender()};
     const d=el("button","pbtn d","Eliminar");d.onclick=delSel;b.appendChild(d);drawCaps(b,p,false);return}
-  if(p){haProps(b,p);return}
+  if(p){haProps(b,p);if(p.virt||(p.dir==="out"&&p.entity)){const r=el("label","",`<input type="checkbox" ${p.app===false?"":"checked"}> Mostrar en la app (sala: ${esc(S.pages.find(x=>x.id===p.page)?.name||"")})`);r.style.cssText="display:block;margin:10px 6px;cursor:pointer";r.querySelector("input").onchange=e=>{if(e.target.checked)delete p.app;else p.app=false;touch()};b.appendChild(r)}return}
   if(!n)return;
   const c=CAT[n.type]||{name:n.type,parameters:[],inputs:[],outputs:[]};
   b.innerHTML=`<div class="ph">${esc(c.name)}</div>`+tbl([["Nombre",`<input id="pnm" value="${esc(n.name||"")}" placeholder="${esc(c.name)}">`,"Nombre que verás en el bloque"],["ID",`<input id="pid" value="${esc(n.id)}">`,"Identificador interno único"],["Tipo",esc(c.name)],["Página",esc(S.pages.find(x=>x.id===n.page)?.name||"")]]);

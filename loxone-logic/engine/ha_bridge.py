@@ -259,6 +259,36 @@ class Bridge:
                     "calls": list(self.calls)[:30], "virtual": {k: v.get("value") for k, v in self.virt.items()},
                     "in": {p["name"]: state_value(self.states.get(p.get("entity")), p.get("attribute"))
                            for p in self.project.get("periphery", []) if p["dir"] == "in" and not p.get("vid")}}
+    def api_app(self):
+        """Modelo de la interfaz de usuario: una sala por página; las tarjetas salen solas del proyecto."""
+        with self.lock:
+            pr = self.project; nodes = pr.get("ha_nodes") or []
+            pages = pr.get("pages") or [{"id": "p1", "name": "Inicio"}]
+            rooms = {p["id"]: {"id": p["id"], "name": p["name"], "controls": []} for p in pages}
+            first = pages[0]["id"]; room = lambda pg: rooms.get(pg) or rooms[first]
+            for n in nodes:
+                if n.get("app") is False: continue
+                if n.get("virt"):
+                    v = self.virt.get(n["id"]) or {}
+                    room(n.get("page"))["controls"].append({"id": n["id"], "type": n["virt"], "name": n.get("name") or n["virt"],
+                        "value": v.get("value", n.get("value")), "min": n.get("min", 0), "max": n.get("max", 100), "step": n.get("step", 1)})
+                elif n.get("dir") == "out" and n.get("entity"):
+                    st = self.states.get(n["entity"]) or {}; at = st.get("attributes") or {}
+                    c = {"id": n["id"], "type": "light" if n.get("rgb") else "status", "name": n.get("name") or n["entity"],
+                         "entity": n["entity"], "state": st.get("state")}
+                    if n.get("rgb"): c["rgb"] = at.get("rgb_color"); c["brightness"] = at.get("brightness")
+                    room(n.get("page"))["controls"].append(c)
+            ui = pr.get("ui") or {}
+            for bl in pr.get("blocks", []):
+                if bl["type"] != "lighting-controller" or bl.get("app") is False: continue
+                cfg = bl.get("config") or {}; names = cfg.get("names", {})
+                ids = sorted(int(k) for k in cfg.get("moods", {}) if int(k) not in (98, 99))
+                room((ui.get(bl["id"]) or {}).get("page"))["controls"].append({"id": bl["id"], "type": "scenes",
+                    "name": bl.get("name") or "Iluminación", "value": (self.engine.out.get(bl["id"]) or {}).get("M", 0),
+                    "scenes": [{"id": k, "name": names.get(str(k), f"Escena {k}")} for k in ids]})
+            return {"dry": self.dry, "connected": self.connected, "rooms": [r for r in rooms.values() if r["controls"]]}
+    def scene(self, block, mood):
+        with self.lock: self.engine.inject(block, "Mood", int(mood))
     def api_entities(self):
         with self.lock:
             return [{"id": e, "name": (s.get("attributes") or {}).get("friendly_name", e), "state": s.get("state"), "domain": e.split(".")[0], "area": self.ent_area.get(e, ""), "device": self.ent_dev.get(e, "")}
@@ -273,8 +303,10 @@ def make_handler(br):
             self.send_header("Content-Length", str(len(b))); self.send_header("Cache-Control", "no-store"); self.end_headers(); self.wfile.write(b)
         def do_GET(self):
             p = self.path.split("?")[0]
-            if p in ("/", "/index.html"):
-                f = os.path.join(HERE, "editor.html")
+            if p in ("/", "/index.html", "/editor", "/app"):
+                home = os.environ.get("INICIO", "editor")
+                page = "app.html" if (p == "/app" or (p in ("/", "/index.html") and home == "app")) else "editor.html"
+                f = os.path.join(HERE, page)
                 return self._send(200, open(f, "rb").read() if os.path.exists(f) else b"editor.html no encontrado", "text/html")
             if p == "/api/catalog":
                 reg = runtime.REGISTRY
@@ -291,6 +323,7 @@ def make_handler(br):
                 return self._send(200 if st else 404, {"id": eid, "state": st.get("state"), "attributes": st.get("attributes") or {}} if st else {"error": "entidad desconocida"})
             if p == "/api/project":
                 with br.lock: return self._send(200, _clean(br.project))
+            if p == "/api/app": return self._send(200, br.api_app())
             if p == "/api/live": return self._send(200, br.api_live())
             self._send(404, {"error": "no existe"})
         def do_PUT(self):
@@ -302,6 +335,8 @@ def make_handler(br):
                     d = json.loads(body)
                     if not br.dry: raise ValueError("La prueba de entradas solo está disponible en SIMULACIÓN")
                     br.simulate(d["entity"], d.get("value")); return self._send(200, {"ok": True})
+                if self.path == "/api/scene":
+                    d = json.loads(body); br.scene(d["block"], d["mood"]); return self._send(200, {"ok": True})
                 if self.path == "/api/virtual":
                     d = json.loads(body); br.set_virtual(d["id"], d.get("value")); return self._send(200, {"ok": True})
                 if self.path == "/api/mode":

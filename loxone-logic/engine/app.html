@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#14161a">
+<title>Casa</title>
+<style>
+:root{--bg:#14161a;--card:#1d2026;--card2:#252932;--tx:#e8eaee;--mut:#8d95a3;--acc:#7cc242;--bad:#e5484d;--ln:#2d323c}
+@media (prefers-color-scheme:light){:root{--bg:#f2f3f5;--card:#fff;--card2:#eceef2;--tx:#1b1e24;--mut:#6a7280;--ln:#dde0e6}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.35 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{position:sticky;top:0;z-index:5;background:var(--bg);padding:max(10px,env(safe-area-inset-top)) 16px 0}
+h1{font-size:20px;margin:6px 0 10px;display:flex;align-items:center;gap:8px}
+#st{margin-left:auto;font-size:12px;font-weight:500;color:var(--mut)}
+#st.sim{color:#e0a82e}#st.off{color:var(--bad)}
+nav{display:flex;gap:8px;overflow-x:auto;padding:0 0 12px;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:none;border:1px solid var(--ln);background:var(--card);color:var(--mut);padding:8px 16px;border-radius:20px;font:inherit;font-weight:600;cursor:pointer}
+nav button.on{background:var(--acc);border-color:var(--acc);color:#10230a}
+main{padding:4px 16px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;max-width:1100px;margin:0 auto}
+.c{background:var(--card);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.c .t{display:flex;align-items:center;gap:10px;font-weight:600}
+.c .t small{margin-left:auto;color:var(--mut);font-weight:500}
+.dot{width:14px;height:14px;border-radius:50%;background:var(--card2);border:1px solid var(--ln);flex:none}
+.dot.on{background:var(--acc);border-color:var(--acc)}
+.sc{display:flex;flex-wrap:wrap;gap:8px}
+.sc button,.btn{border:1px solid var(--ln);background:var(--card2);color:var(--tx);padding:10px 14px;border-radius:12px;font:inherit;cursor:pointer;min-height:44px}
+.sc button.on{background:var(--acc);border-color:var(--acc);color:#10230a;font-weight:700}
+.btn:active,.sc button:active{transform:scale(.97)}
+.sw{position:relative;width:54px;height:30px;flex:none}
+.sw input{opacity:0;position:absolute;inset:0;width:100%;height:100%;margin:0;cursor:pointer;z-index:2}
+.sw i{position:absolute;inset:0;background:var(--card2);border:1px solid var(--ln);border-radius:15px;transition:.15s}
+.sw i:after{content:"";position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:var(--mut);transition:.15s}
+.sw input:checked+i{background:var(--acc);border-color:var(--acc)}
+.sw input:checked+i:after{left:27px;background:#fff}
+input[type=range]{width:100%;accent-color:var(--acc);height:32px}
+input[type=color]{width:100%;height:44px;border:1px solid var(--ln);border-radius:12px;background:var(--card2);padding:3px}
+.sw2{display:flex;align-items:center;justify-content:space-between}
+.empty{grid-column:1/-1;color:var(--mut);text-align:center;padding:50px 10px}
+</style></head><body>
+<header><h1>Casa <span id="st"></span></h1><nav id="nav"></nav></header>
+<main id="m"></main>
+<script>
+const $=s=>document.querySelector(s);
+const api=async(p,m="GET",b)=>{const r=await fetch(p,{method:m,body:b?JSON.stringify(b):undefined});const j=await r.json();if(!r.ok)throw new Error(j.error||r.status);return j};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let model=null,room=null,busy=0,sig="";
+try{room=localStorage.getItem("room")}catch(e){}
+const hex=rgb=>"#"+(rgb||[255,255,255]).map(v=>Math.max(0,Math.min(255,v|0)).toString(16).padStart(2,"0")).join("");
+const send=async(id,v)=>{busy=Date.now()+1500;try{await api("api/virtual","PUT",{id,value:v})}catch(e){alert(e.message)}};
+const scene=async(b,m)=>{busy=Date.now()+800;try{await api("api/scene","PUT",{block:b,mood:m})}catch(e){alert(e.message)}setTimeout(poll,400)};
+function card(c){
+  const d=document.createElement("div");d.className="c";
+  if(c.type==="scenes"){
+    d.innerHTML=`<div class="t"><span class="dot ${c.value?"on":""}"></span>${esc(c.name)}</div><div class="sc"></div>`;
+    const w=d.querySelector(".sc");
+    [{id:0,name:"Apagado"},...c.scenes].forEach(s=>{const b=document.createElement("button");b.textContent=s.name;if(+c.value===+s.id)b.className="on";b.onclick=()=>scene(c.id,s.id);w.appendChild(b)});
+  }else if(c.type==="light"){
+    const on=c.state==="on";
+    d.innerHTML=`<div class="t"><span class="dot ${on?"on":""}" style="${on&&c.rgb?`background:${hex(c.rgb)};border-color:${hex(c.rgb)}`:""}"></span>${esc(c.name)}<small>${on?"Encendida":c.state==="off"?"Apagada":esc(c.state||"—")}</small></div>`;
+  }else if(c.type==="status"){
+    const on=["on","open","home","true"].includes(String(c.state));
+    d.innerHTML=`<div class="t"><span class="dot ${on?"on":""}"></span>${esc(c.name)}<small>${esc(c.state??"—")}</small></div>`;
+  }else if(c.type==="switch"){
+    d.innerHTML=`<div class="sw2"><span class="t">${esc(c.name)}</span><label class="sw"><input type="checkbox" ${+c.value?"checked":""}><i></i></label></div>`;
+    d.querySelector("input").onchange=e=>send(c.id,e.target.checked?1:0);
+  }else if(c.type==="button"){
+    d.innerHTML=`<div class="t">${esc(c.name)}</div><button class="btn">Pulsar</button>`;
+    d.querySelector("button").onclick=()=>send(c.id,1);
+  }else if(c.type==="slider"){
+    d.innerHTML=`<div class="t">${esc(c.name)}<small>${esc(c.value??0)}</small></div><input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${c.value??0}">`;
+    const i=d.querySelector("input"),s=d.querySelector("small");i.oninput=()=>s.textContent=i.value;i.onchange=()=>send(c.id,Number(i.value));
+  }else if(c.type==="color"){
+    const hv=typeof c.value==="string"&&c.value[0]==="#"?c.value:"#ffffff";
+    d.innerHTML=`<div class="t">${esc(c.name)}</div><input type="color" value="${hv}">`;
+    d.querySelector("input").onchange=e=>send(c.id,e.target.value);
+  }
+  return d;
+}
+function draw(){
+  const rs=model.rooms,nav=$("#nav"),m=$("#m");
+  if(!rs.find(r=>r.id===room))room=rs[0]?.id;
+  nav.innerHTML="";rs.forEach(r=>{const b=document.createElement("button");b.textContent=r.name;if(r.id===room)b.className="on";
+    b.onclick=()=>{room=r.id;try{localStorage.setItem("room",room)}catch(e){}sig="";draw()};nav.appendChild(b)});
+  nav.style.display=rs.length>1?"flex":"none";
+  m.innerHTML="";const r=rs.find(x=>x.id===room);
+  if(!r){m.innerHTML='<div class="empty">Aún no hay nada que mostrar.<br>Añade luces, escenas o controles virtuales en el editor y despliega.</div>';return}
+  r.controls.forEach(c=>m.appendChild(card(c)));
+}
+async function poll(){
+  try{
+    const j=await api("api/app");
+    const st=$("#st");st.className=!j.connected?"off":j.dry?"sim":"";st.textContent=!j.connected?"sin conexión":j.dry?"simulación":"";
+    // no redibujar mientras el usuario arrastra un control
+    const s=JSON.stringify(j.rooms);
+    if(Date.now()<busy&&model){model=j;return}
+    model=j;if(s!==sig){sig=s;draw()}
+  }catch(e){const st=$("#st");st.className="off";st.textContent="sin conexión"}
+}
+poll();setInterval(poll,1500);
+</script></body></html>

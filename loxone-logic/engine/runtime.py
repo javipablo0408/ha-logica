@@ -121,7 +121,7 @@ class Engine:
         self.inputs_ext = {}                      # (block, port) -> valor desde periferia
         self.out = {bid: {} for bid in self.blocks}
         self.order = self._toposort()
-        self.ncycles = 0; self._pulses = set()
+        self.ncycles = 0; self._pulses = set(); self._once = set()
     def _toposort(self):
         deps = {b: set() for b in self.blocks}
         for (sb, _), (db, _) in self.wires:
@@ -148,6 +148,10 @@ class Engine:
                     if initial or not v: v = 0
                     else: self._pulses.add(key)
                 self.inputs_ext[key] = v
+    def inject(self, block, port, value):
+        """Valor puntual (un ciclo) en una entrada de bloque; lo usa la app para elegir escena."""
+        if block not in self.blocks: raise KeyError(f"bloque desconocido: {block}")
+        self.inputs_ext[(block, port)] = value; self._once.add((block, port))
     def _adapt_in(self, p, v):
         """Perfil de adaptación de una entrada: no disponible -> fallback; equals (lista separada por comas) -> 0/1;
         pulse sin equals -> 1 en cada cambio con valor real; texto -> número; invert; scale [e0,e1,s0,s1]."""
@@ -187,6 +191,8 @@ class Engine:
         self.ncycles += 1
         for k in self._pulses: self.inputs_ext[k] = 0      # el pulso dura un ciclo
         self._pulses.clear()
+        for k in self._once: self.inputs_ext.pop(k, None)   # orden puntual de la app: dura un ciclo
+        self._once.clear()
         res = {}
         for p in self.periph:
             if p["dir"] == "out":

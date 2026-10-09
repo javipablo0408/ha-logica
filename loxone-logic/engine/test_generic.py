@@ -120,3 +120,27 @@ def test_pulse_ignores_attribute_only_updates():
     assert b.engine.out["_pt0"]["Sv"] == 0
     b.push_inputs("sensor.x"); b.engine.cycle(1.0)
     assert b.engine.out["_pt0"]["Sv"] == 1
+
+def test_app_model_and_scene():
+    import json
+    d = json.load(open(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "ida-luz-lighting.json"))) if False else None
+    p = {"blocks": [{"id": "lc1", "type": "lighting-controller", "name": "Luces", "config": {"moods": {"1": {"Lc1": 100}, "2": {"Lc1": 50}}, "names": {"1": "Cálido"}}}],
+         "wires": [], "consts": {}, "settings": {}, "pages": [{"id": "p1", "name": "Salón"}, {"id": "p2", "name": "Vacía"}],
+         "ui": {"lc1": {"x": 0, "y": 0, "page": "p1"}}, "periphery": [],
+         "virtuals": [{"id": "ha1", "name": "Brillo", "kind": "slider", "value": 40}],
+         "ha_nodes": [{"id": "ha1", "dir": "in", "virt": "slider", "name": "Brillo", "min": 0, "max": 100, "step": 1, "page": "p1", "value": 40},
+                      {"id": "ha2", "dir": "out", "rgb": True, "name": "Lámpara", "entity": "light.l", "page": "p1"},
+                      {"id": "ha3", "dir": "out", "name": "Oculta", "entity": "light.o", "page": "p1", "app": False}]}
+    b = Bridge(p, "/tmp/_t10.json", dry=True)
+    b.states["light.l"] = {"state": "on", "attributes": {"rgb_color": [255, 0, 0]}}
+    m = b.api_app()
+    assert [r["name"] for r in m["rooms"]] == ["Salón"]
+    cs = {c["type"]: c for c in m["rooms"][0]["controls"]}
+    assert set(cs) == {"slider", "light", "scenes"} and cs["slider"]["value"] == 40 and cs["light"]["rgb"] == [255, 0, 0]
+    assert [s["name"] for s in cs["scenes"]["scenes"]] == ["Cálido", "Escena 2"]
+    b.scene("lc1", 2); b.engine.cycle(1.0)
+    assert b.engine.out["lc1"]["M"] == 2 and b.api_app()["rooms"][0]["controls"][-1]["value"] == 2
+    b.scene("lc1", 2); b.engine.cycle(1.0); b.scene("lc1", 1); b.engine.cycle(1.0)
+    assert b.engine.out["lc1"]["M"] == 1
+    b.scene("lc1", 0); b.engine.cycle(1.0)
+    assert b.engine.out["lc1"]["M"] == 0
