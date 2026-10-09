@@ -260,32 +260,43 @@ class Bridge:
                     "in": {p["name"]: state_value(self.states.get(p.get("entity")), p.get("attribute"))
                            for p in self.project.get("periphery", []) if p["dir"] == "in" and not p.get("vid")}}
     def api_app(self):
-        """Modelo de la interfaz de usuario: una sala por página; las tarjetas salen solas del proyecto."""
+        """Modelo de la interfaz: una sala por página y UNA tarjeta por bloque (como Loxone).
+        Lo que va cableado a un controlador de iluminación (brillo, color, luz de salida) vive dentro de su tarjeta."""
         with self.lock:
-            pr = self.project; nodes = pr.get("ha_nodes") or []
+            pr = self.project; nodes = pr.get("ha_nodes") or []; byid = {n["id"]: n for n in nodes}
             pages = pr.get("pages") or [{"id": "p1", "name": "Inicio"}]
             rooms = {p["id"]: {"id": p["id"], "name": p["name"], "controls": []} for p in pages}
             first = pages[0]["id"]; room = lambda pg: rooms.get(pg) or rooms[first]
-            for n in nodes:
-                if n.get("app") is False: continue
-                if n.get("virt"):
-                    v = self.virt.get(n["id"]) or {}
-                    room(n.get("page"))["controls"].append({"id": n["id"], "type": n["virt"], "name": n.get("name") or n["virt"],
-                        "value": v.get("value", n.get("value")), "min": n.get("min", 0), "max": n.get("max", 100), "step": n.get("step", 1)})
-                elif n.get("dir") == "out" and n.get("entity"):
-                    st = self.states.get(n["entity"]) or {}; at = st.get("attributes") or {}
-                    c = {"id": n["id"], "type": "light" if n.get("rgb") else "status", "name": n.get("name") or n["entity"],
-                         "entity": n["entity"], "state": st.get("state")}
-                    if n.get("rgb"): c["rgb"] = at.get("rgb_color"); c["brightness"] = at.get("brightness")
-                    room(n.get("page"))["controls"].append(c)
-            ui = pr.get("ui") or {}
+            ui = pr.get("ui") or {}; wires = pr.get("ha_wires") or []
+            def virt(n):
+                v = self.virt.get(n["id"]) or {}
+                return {"id": n["id"], "type": n["virt"], "name": n.get("name") or n["virt"], "value": v.get("value", n.get("value")),
+                        "min": n.get("min", 0), "max": n.get("max", 100), "step": n.get("step", 1)}
+            def light(n):
+                st = self.states.get(n["entity"]) or {}; at = st.get("attributes") or {}
+                return {"state": st.get("state"), "rgb": at.get("rgb_color") if n.get("rgb") else None}
+            used = set()
             for bl in pr.get("blocks", []):
                 if bl["type"] != "lighting-controller" or bl.get("app") is False: continue
-                cfg = bl.get("config") or {}; names = cfg.get("names", {})
+                cfg = bl.get("config") or {}; names = cfg.get("names", {}); bid = bl["id"]
                 ids = sorted(int(k) for k in cfg.get("moods", {}) if int(k) not in (98, 99))
-                room((ui.get(bl["id"]) or {}).get("page"))["controls"].append({"id": bl["id"], "type": "scenes",
-                    "name": bl.get("name") or "Iluminación", "value": (self.engine.out.get(bl["id"]) or {}).get("M", 0),
-                    "scenes": [{"id": k, "name": names.get(str(k), f"Escena {k}")} for k in ids]})
+                ins = [byid[w["f"]] for w in wires if w.get("t") == bid and w["f"] in byid and byid[w["f"]].get("virt")]
+                outs = [byid[w["t"]] for w in wires if w.get("f") == bid and w["t"] in byid and byid[w["t"]].get("entity")]
+                used.update(n["id"] for n in ins + outs)
+                lights = [light(n) for n in outs]; seen = set()
+                ins = [n for n in ins if not (n["id"] in seen or seen.add(n["id"]))]
+                on = any(l["state"] == "on" for l in lights)
+                room((ui.get(bid) or {}).get("page"))["controls"].append({"id": bid, "type": "lighting",
+                    "name": bl.get("name") or "Iluminación", "value": (self.engine.out.get(bid) or {}).get("M", 0), "on": on,
+                    "rgb": next((l["rgb"] for l in lights if l["rgb"] and l["state"] == "on"), None),
+                    "scenes": [{"id": k, "name": names.get(str(k), f"Escena {k}")} for k in ids],
+                    "controls": [virt(n) for n in ins if n.get("app") is not False]})
+            for n in nodes:
+                if n.get("app") is False or n["id"] in used: continue
+                if n.get("virt"): room(n.get("page"))["controls"].append(virt(n))
+                elif n.get("dir") == "out" and n.get("entity"):
+                    l = light(n); room(n.get("page"))["controls"].append({"id": n["id"], "type": "light" if n.get("rgb") else "status",
+                        "name": n.get("name") or n["entity"], "entity": n["entity"], **l})
             return {"dry": self.dry, "connected": self.connected, "rooms": [r for r in rooms.values() if r["controls"]]}
     def scene(self, block, mood):
         with self.lock: self.engine.inject(block, "Mood", int(mood))

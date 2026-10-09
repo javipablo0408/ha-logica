@@ -128,6 +128,7 @@ def test_app_model_and_scene():
          "wires": [], "consts": {}, "settings": {}, "pages": [{"id": "p1", "name": "Salón"}, {"id": "p2", "name": "Vacía"}],
          "ui": {"lc1": {"x": 0, "y": 0, "page": "p1"}}, "periphery": [],
          "virtuals": [{"id": "ha1", "name": "Brillo", "kind": "slider", "value": 40}],
+         "ha_wires": [{"f": "ha1", "fp": "v", "t": "lc1", "tp": "MBr"}, {"f": "lc1", "fp": "Lc1", "t": "ha2", "tp": "r"}],
          "ha_nodes": [{"id": "ha1", "dir": "in", "virt": "slider", "name": "Brillo", "min": 0, "max": 100, "step": 1, "page": "p1", "value": 40},
                       {"id": "ha2", "dir": "out", "rgb": True, "name": "Lámpara", "entity": "light.l", "page": "p1"},
                       {"id": "ha3", "dir": "out", "name": "Oculta", "entity": "light.o", "page": "p1", "app": False}]}
@@ -136,8 +137,9 @@ def test_app_model_and_scene():
     m = b.api_app()
     assert [r["name"] for r in m["rooms"]] == ["Salón"]
     cs = {c["type"]: c for c in m["rooms"][0]["controls"]}
-    assert set(cs) == {"slider", "light", "scenes"} and cs["slider"]["value"] == 40 and cs["light"]["rgb"] == [255, 0, 0]
-    assert [s["name"] for s in cs["scenes"]["scenes"]] == ["Cálido", "Escena 2"]
+    assert set(cs) == {"lighting"}, cs.keys()          # UNA tarjeta por bloque: brillo y luz van dentro
+    L = cs["lighting"]; assert L["on"] and L["rgb"] == [255, 0, 0] and L["controls"][0]["value"] == 40
+    assert [s["name"] for s in L["scenes"]] == ["Cálido", "Escena 2"]
     b.scene("lc1", 2); b.engine.cycle(1.0)
     assert b.engine.out["lc1"]["M"] == 2 and b.api_app()["rooms"][0]["controls"][-1]["value"] == 2
     b.scene("lc1", 2); b.engine.cycle(1.0); b.scene("lc1", 1); b.engine.cycle(1.0)

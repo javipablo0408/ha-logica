@@ -35,6 +35,7 @@ main{padding:4px 16px 40px;display:grid;grid-template-columns:repeat(auto-fill,m
 input[type=range]{width:100%;accent-color:var(--acc);height:32px}
 input[type=color]{width:100%;height:44px;border:1px solid var(--ln);border-radius:12px;background:var(--card2);padding:3px}
 .sw2{display:flex;align-items:center;justify-content:space-between}
+.row{display:flex;justify-content:space-between;color:var(--mut);margin-bottom:2px}
 .empty{grid-column:1/-1;color:var(--mut);text-align:center;padding:50px 10px}
 </style></head><body>
 <header><h1>Casa <span id="st"></span></h1><nav id="nav"></nav></header>
@@ -48,32 +49,36 @@ try{room=localStorage.getItem("room")}catch(e){}
 const hex=rgb=>"#"+(rgb||[255,255,255]).map(v=>Math.max(0,Math.min(255,v|0)).toString(16).padStart(2,"0")).join("");
 const send=async(id,v)=>{busy=Date.now()+1500;try{await api("api/virtual","PUT",{id,value:v})}catch(e){alert(e.message)}};
 const scene=async(b,m)=>{busy=Date.now()+800;try{await api("api/scene","PUT",{block:b,mood:m})}catch(e){alert(e.message)}setTimeout(poll,400)};
+function ctl(c,d){
+  if(c.type==="switch"){
+    const w=document.createElement("div");w.className="sw2";w.innerHTML=`<span class="t">${esc(c.name)}</span><label class="sw"><input type="checkbox" ${+c.value?"checked":""}><i></i></label>`;
+    w.querySelector("input").onchange=e=>send(c.id,e.target.checked?1:0);d.appendChild(w);
+  }else if(c.type==="button"){
+    const b=document.createElement("button");b.className="btn";b.textContent=c.name;b.onclick=()=>send(c.id,1);d.appendChild(b);
+  }else if(c.type==="slider"){
+    const w=document.createElement("div");w.innerHTML=`<div class="row"><span>${esc(c.name)}</span><small>${esc(c.value??0)}</small></div><input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${c.value??0}">`;
+    const i=w.querySelector("input"),s=w.querySelector("small");i.oninput=()=>s.textContent=i.value;i.onchange=()=>send(c.id,Number(i.value));d.appendChild(w);
+  }else if(c.type==="color"){
+    const hv=typeof c.value==="string"&&c.value[0]==="#"?c.value:"#ffffff";
+    const w=document.createElement("div");w.innerHTML=`<div class="row"><span>${esc(c.name)}</span></div><input type="color" value="${hv}">`;
+    w.querySelector("input").onchange=e=>send(c.id,e.target.value);d.appendChild(w);
+  }
+}
 function card(c){
   const d=document.createElement("div");d.className="c";
-  if(c.type==="scenes"){
-    d.innerHTML=`<div class="t"><span class="dot ${c.value?"on":""}"></span>${esc(c.name)}</div><div class="sc"></div>`;
+  if(c.type==="lighting"){
+    const col=c.on&&c.rgb?hex(c.rgb):"";
+    d.innerHTML=`<div class="t"><span class="dot ${c.on?"on":""}" style="${col?`background:${col};border-color:${col}`:""}"></span>${esc(c.name)}<small>${c.on?"Encendida":"Apagada"}</small></div><div class="sc"></div>`;
     const w=d.querySelector(".sc");
     [{id:0,name:"Apagado"},...c.scenes].forEach(s=>{const b=document.createElement("button");b.textContent=s.name;if(+c.value===+s.id)b.className="on";b.onclick=()=>scene(c.id,s.id);w.appendChild(b)});
+    c.controls.forEach(x=>ctl(x,d));
   }else if(c.type==="light"){
     const on=c.state==="on";
     d.innerHTML=`<div class="t"><span class="dot ${on?"on":""}" style="${on&&c.rgb?`background:${hex(c.rgb)};border-color:${hex(c.rgb)}`:""}"></span>${esc(c.name)}<small>${on?"Encendida":c.state==="off"?"Apagada":esc(c.state||"—")}</small></div>`;
   }else if(c.type==="status"){
     const on=["on","open","home","true"].includes(String(c.state));
     d.innerHTML=`<div class="t"><span class="dot ${on?"on":""}"></span>${esc(c.name)}<small>${esc(c.state??"—")}</small></div>`;
-  }else if(c.type==="switch"){
-    d.innerHTML=`<div class="sw2"><span class="t">${esc(c.name)}</span><label class="sw"><input type="checkbox" ${+c.value?"checked":""}><i></i></label></div>`;
-    d.querySelector("input").onchange=e=>send(c.id,e.target.checked?1:0);
-  }else if(c.type==="button"){
-    d.innerHTML=`<div class="t">${esc(c.name)}</div><button class="btn">Pulsar</button>`;
-    d.querySelector("button").onclick=()=>send(c.id,1);
-  }else if(c.type==="slider"){
-    d.innerHTML=`<div class="t">${esc(c.name)}<small>${esc(c.value??0)}</small></div><input type="range" min="${c.min}" max="${c.max}" step="${c.step}" value="${c.value??0}">`;
-    const i=d.querySelector("input"),s=d.querySelector("small");i.oninput=()=>s.textContent=i.value;i.onchange=()=>send(c.id,Number(i.value));
-  }else if(c.type==="color"){
-    const hv=typeof c.value==="string"&&c.value[0]==="#"?c.value:"#ffffff";
-    d.innerHTML=`<div class="t">${esc(c.name)}</div><input type="color" value="${hv}">`;
-    d.querySelector("input").onchange=e=>send(c.id,e.target.value);
-  }
+  }else{const t=document.createElement("div");t.className="t";if(c.type!=="switch"&&c.type!=="button"&&c.type!=="slider"){t.textContent=c.name;d.appendChild(t)}ctl(c,d)}
   return d;
 }
 function draw(){
