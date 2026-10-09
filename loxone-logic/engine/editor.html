@@ -660,7 +660,7 @@ function drawProps(){
     `<div class="help">Selecciona un objeto del lienzo para editar sus propiedades. Doble clic en el árbol añade el elemento; arrastrarlo lo coloca donde quieras.</div>`;
     [["plat","lat"],["plon","lon"],["ptz","tz"]].forEach(([i,k])=>$("#"+i).onchange=e=>{const t=e.target.value.trim();if(t==="")delete S.settings[k];else S.settings[k]=k==="tz"?t:Number(t.replace(",","."));touch()});return}
   if(nt){b.innerHTML=`<div class="ph">Comentario</div><div style="padding:6px"><textarea id="nt" rows="6" style="width:100%">${esc(nt.text||"")}</textarea></div>`;$("#nt").onchange=e=>{nt.text=e.target.value;touch();fullRender()};
-    const d=el("button","pbtn d","Eliminar");d.onclick=delSel;b.appendChild(d);return}
+    const d=el("button","pbtn d","Eliminar");d.onclick=delSel;b.appendChild(d);drawCaps(b,p,false);return}
   if(p){haProps(b,p);return}
   if(!n)return;
   const c=CAT[n.type]||{name:n.type,parameters:[],inputs:[],outputs:[]};
@@ -711,6 +711,27 @@ const PROF_OUT=[
  ["Volumen del reproductor (0-100 %)",{service:"media_player.volume_set",service_data:{volume_level:"{v}"},service_when:"",adapt:{scale_out:[0,100,0,1]}},""],
  ["Servicio personalizado",{},"Rellena «Servicio» (dominio.servicio) y los datos en JSON; {v} se sustituye por el valor del bloque."],
 ];
+
+const ATTR_HIDE=new Set(["friendly_name","icon","entity_picture","supported_features","attribution","restored","assumed_state"]);
+async function drawCaps(b,p,isIn){
+  if(!p.entity)return;const box=el("div");b.insertBefore(box,b.querySelector(".pbtn"));
+  let d;try{d=await api("api/entity?id="+encodeURIComponent(p.entity))}catch(x){box.innerHTML=`<div class="help">Sin datos de esta entidad (¿existe?).</div>`;return}
+  const at=Object.entries(d.attributes).filter(([k])=>!ATTR_HIDE.has(k));
+  const fmt=v=>{const t=typeof v==="object"?JSON.stringify(v):String(v);return t.length>38?t.slice(0,36)+"…":t};
+  let h=`<div class="ph">Lo que expone esta entidad</div>`;
+  const cm=d.attributes.supported_color_modes;
+  if(cm)h+=`<div class="help"><b>Modos de color:</b> ${esc(cm.join(", "))}${d.attributes.effect_list?`<br><b>Efectos:</b> ${esc(d.attributes.effect_list.join(", "))}`:""}</div>`;
+  h+=tbl([["Estado",esc(fmt(d.state))],...at.map(([k,v])=>[k,esc(fmt(v)),isIn?"Clic para leer este atributo":""])]);
+  box.innerHTML=h;
+  if(isIn)box.querySelectorAll(".pt2 tr").forEach((tr,i)=>{if(i===0){tr.style.cursor="pointer";tr.title="Leer el estado";tr.onclick=()=>{p.attribute="";touch();drawProps()};return}
+    const k=at[i-1][0];tr.style.cursor="pointer";if(p.attribute===k)tr.style.background="var(--acct)";tr.onclick=()=>{p.attribute=k;touch();drawProps()}});
+  const dev=ENT.find(x=>x.id===p.entity)?.device;
+  if(dev){const sib=ENT.filter(x=>x.device===dev&&x.id!==p.entity);
+    if(sib.length){const s=el("div");s.innerHTML=`<div class="ph">Más entidades de «${esc(dev)}»</div>`;
+      sib.forEach(x=>{const r=el("div","help");r.style.cssText="display:flex;gap:6px;align-items:center;padding:3px 8px";r.innerHTML=`<span style="flex:1;overflow:hidden;text-overflow:ellipsis" title="${esc(x.id)}">${esc(x.name)} <small style="color:var(--mute)">${esc(x.domain)}</small></span>`;
+        const bi=el("button","pbtn","↦ Ent.");bi.style.margin="0";bi.onclick=()=>addHA("in",x.id);r.appendChild(bi);
+        if(OUT_DOM.has(x.domain)){const bo=el("button","pbtn","↤ Sal.");bo.style.margin="0";bo.onclick=()=>addHA("out",x.id);r.appendChild(bo)}s.appendChild(r)});box.appendChild(s)}}
+}
 function haProps(b,p){
   if(p.rgb){const full=p.adapt?.scale_out?"100":"255";
     b.innerHTML=`<div class="ph">Salida de luz RGB</div>`+tbl([["Luz",`<input id="pe" value="${esc(p.entity)}" placeholder="light.salon">`],["Nombre",`<input id="pnm" value="${esc(p.name)}">`],
@@ -751,7 +772,7 @@ function haProps(b,p){
   $("#psc").onchange=e=>{const t=e.target.value.trim(),k=isIn?"scale":"scale_out";if(!t){delete a[k];e.target.style.borderColor="";touch();return}
     try{const v=JSON.parse(t);if(!Array.isArray(v)||v.length!==4)throw 0;a[k]=v;e.target.style.borderColor="";touch()}catch(x){e.target.style.borderColor="var(--bad)"}};
   if(!isIn&&p.entity.startsWith("light.")){const cv=el("button","pbtn","Convertir en salida RGB (3 pines)");cv.onclick=()=>{S.wires=S.wires.filter(w=>w.t!==p.id);p.rgb=true;p.adapt={scale_out:[0,100,0,255]};p.service="";p.service_data=null;p.service_when="";touch();fullRender();setSel([p.id])};b.appendChild(cv)}
-  const d=el("button","pbtn d","Eliminar");d.onclick=delSel;b.appendChild(d);
+  const d=el("button","pbtn d","Eliminar");d.onclick=delSel;b.appendChild(d);drawCaps(b,p,isIn);
 }
 
 /* ---------- menú contextual / avisos ---------- */

@@ -4,6 +4,7 @@ STATES = [{"entity_id": e, "state": s, "attributes": {"friendly_name": n}} for e
  ("binary_sensor.presencia_pasillo","off","Presencia pasillo"),("light.pasillo","off","Luz pasillo"),
  ("light.salon","on","Luz salón"),("cover.persiana_salon","open","Persiana salón"),
  ("sensor.temp_salon","21.5","Temperatura salón"),("switch.enchufe","off","Enchufe")]]
+STATES[1]["attributes"].update({"supported_color_modes":["color_temp","xy"],"effect_list":["blink","breathe"],"brightness":254,"color_temp_kelvin":3000,"rgb_color":[255,200,120]})
 async def h(ws):
     await ws.send(json.dumps({"type":"auth_required"})); await ws.recv(); await ws.send(json.dumps({"type":"auth_ok"}))
     last = 0

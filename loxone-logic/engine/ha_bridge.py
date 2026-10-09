@@ -248,6 +248,11 @@ def make_handler(br):
                     c = reg.get(b["id"]); out.append({**b, "ui": ui.get(b["id"], {}), "impl": "no" if c is None else ("stub" if getattr(c, "STUB", False) else "ok")})
                 return self._send(200, out)
             if p == "/api/entities": return self._send(200, br.api_entities())
+            if p == "/api/entity":
+                import urllib.parse
+                eid = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query).get("id", [""])[0]
+                with br.lock: st = br.states.get(eid)
+                return self._send(200 if st else 404, {"id": eid, "state": st.get("state"), "attributes": st.get("attributes") or {}} if st else {"error": "entidad desconocida"})
             if p == "/api/project":
                 with br.lock: return self._send(200, _clean(br.project))
             if p == "/api/live": return self._send(200, br.api_live())
