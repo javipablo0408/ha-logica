@@ -52,7 +52,10 @@ def rgb_for(entity, vals):
     c = lambda x: int(max(0, min(255, round(float(x or 0)))))
     r, g, b = c(vals.get("r")), c(vals.get("g")), c(vals.get("b"))
     br = vals.get("br")
-    if (r, g, b) == (0, 0, 0) or (br is not None and float(br or 0) <= 0): return ("light", "turn_off", {"entity_id": entity})
+    if br is not None:
+        if float(br or 0) <= 0: return ("light", "turn_off", {"entity_id": entity})
+        if (r, g, b) == (0, 0, 0): r = g = b = 255          # con brillo conectado, color sin elegir = blanco
+    elif (r, g, b) == (0, 0, 0): return ("light", "turn_off", {"entity_id": entity})
     d = {"entity_id": entity, "rgb_color": [r, g, b]}
     if br is not None: d["brightness_pct"] = int(max(1, min(100, round(float(br)))))
     return ("light", "turn_on", d)

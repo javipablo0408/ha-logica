@@ -48,6 +48,7 @@ def test_rgb_group_single_call():
     assert rgb_for("light.x", {"r": 255, "g": 0, "b": 128})[2]["rgb_color"] == [255, 0, 128]
     assert rgb_for("light.x", {"r": 0, "g": 0, "b": 0})[1] == "turn_off"
     assert rgb_for("light.x", {"r": 9, "g": 9, "b": 9, "br": 0})[1] == "turn_off"
+    assert rgb_for("light.x", {"r": 0, "g": 0, "b": 0, "br": 50})[2]["rgb_color"] == [255, 255, 255]
     sc = {"V1": 0, "Sv1": 0, "V2": 1, "Sv2": 1}
     blocks = [{"id": k, "type": "scaler", "params": sc} for k in "rgb"]
     per = [{"name": f"in_{k}", "dir": "in", "target": f"{k}.V", "entity": f"sensor.{k}"} for k in "rgb"]
