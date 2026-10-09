@@ -80,3 +80,25 @@ def test_virtual_inputs():
     assert b.api_live()["virtual"] == {"v1": 70, "v2": "#000000"}
     try: b.set_virtual("nope", 1); assert False
     except KeyError: pass
+
+def test_button_toggles_light_each_press():
+    import asyncio
+    sc = {"V1": 0, "Sv1": 0, "V2": 1, "Sv2": 1}
+    p = {"blocks": [{"id": "_pt0", "type": "scaler", "params": sc}], "wires": [], "consts": {}, "settings": {},
+         "periphery": [{"name": "btn", "dir": "in", "target": "_pt0.V", "entity": "sensor.btn_action", "adapt": {"pulse": True, "equals": "single"}},
+                       {"name": "Ida luz", "dir": "out", "target": "_pt0.Sv", "entity": "light.ida", "service": "homeassistant.toggle", "service_when": "rise"}]}
+    b = Bridge(p, "/tmp/_t4.json", dry=True); hb.CYCLE = 0.02
+    async def go():
+        t = asyncio.create_task(b.loop(None)); await asyncio.sleep(0.1)
+        for _ in range(3):
+            b.states["sensor.btn_action"] = {"state": "single"}; b.push_inputs("sensor.btn_action"); await asyncio.sleep(0.12)
+            b.states["sensor.btn_action"] = {"state": ""}; b.push_inputs("sensor.btn_action"); await asyncio.sleep(0.08)
+        t.cancel()
+    asyncio.run(go())
+    assert [c["service"] for c in b.calls].count("homeassistant.toggle") == 3, list(b.calls)
+
+def test_event_entity_reads_event_type():
+    from ha_bridge import state_value
+    st = {"entity_id": "event.x_action", "state": "2026-10-09T20:00:00", "attributes": {"event_type": "single"}}
+    assert state_value(st) == "single"
+    assert state_value({"entity_id": "sensor.x", "state": "on", "attributes": {}}) == "on"

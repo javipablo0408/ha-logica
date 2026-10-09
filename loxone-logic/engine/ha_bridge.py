@@ -62,6 +62,7 @@ def rgb_for(entity, vals):
 
 def state_value(st, attribute=None):
     if st is None: return None
+    if not attribute and str(st.get("entity_id", "")).startswith("event."): attribute = "event_type"   # el estado de un evento es solo una marca de tiempo
     if attribute: return (st.get("attributes") or {}).get(attribute)
     return st.get("state")
 
