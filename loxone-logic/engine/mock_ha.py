@@ -6,8 +6,12 @@ STATES = [{"entity_id": e, "state": s, "attributes": {"friendly_name": n}} for e
  ("sensor.temp_salon","21.5","Temperatura salón"),("switch.enchufe","off","Enchufe")]]
 async def h(ws):
     await ws.send(json.dumps({"type":"auth_required"})); await ws.recv(); await ws.send(json.dumps({"type":"auth_ok"}))
+    last = 0
     async for raw in ws:
         m = json.loads(raw)
+        if m["id"] <= last:   # como HA real: los ids deben crecer
+            await ws.send(json.dumps({"id":m["id"],"type":"result","success":False,"error":{"code":"id_reuse","message":"Identifier values have to increase."}})); continue
+        last = m["id"]
         if m["type"]=="get_states": await ws.send(json.dumps({"id":m["id"],"type":"result","success":True,"result":STATES}))
         elif m["type"]=="config/area_registry/list": await ws.send(json.dumps({"id":m["id"],"type":"result","success":True,"result":[{"area_id":"salon","name":"Salón"},{"area_id":"pasillo","name":"Pasillo"}]}))
         elif m["type"]=="config/device_registry/list": await ws.send(json.dumps({"id":m["id"],"type":"result","success":True,"result":[]}))

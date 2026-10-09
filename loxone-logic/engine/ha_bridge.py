@@ -156,7 +156,7 @@ class Bridge:
             await ws.send(json.dumps({"type": "auth", "access_token": token}))
             r = json.loads(await ws.recv())
             if r["type"] != "auth_ok": raise SystemExit(f"Auth fallida: {r}")
-            gid, sid, cid, aid, eid, did = (self.nid() for _ in range(6))
+            aid, eid, did, gid, cid, sid = (self.nid() for _ in range(6))   # HA exige ids crecientes en el orden de envío
             reg = {}
             for i_, t_ in ((aid, "area"), (eid, "entity"), (did, "device")):
                 await ws.send(json.dumps({"id": i_, "type": f"config/{t_}_registry/list"}))
