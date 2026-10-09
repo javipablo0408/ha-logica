@@ -102,3 +102,11 @@ def test_event_entity_reads_event_type():
     st = {"entity_id": "event.x_action", "state": "2026-10-09T20:00:00", "attributes": {"event_type": "single"}}
     assert state_value(st) == "single"
     assert state_value({"entity_id": "sensor.x", "state": "on", "attributes": {}}) == "on"
+
+def test_simulate_input():
+    p = {"blocks": [{"id": "_pt0", "type": "scaler", "params": {"V1": 0, "Sv1": 0, "V2": 1, "Sv2": 1}}], "wires": [], "consts": {}, "settings": {},
+         "periphery": [{"name": "btn", "dir": "in", "target": "_pt0.V", "entity": "event.x_action", "adapt": {"pulse": True, "equals": "single"}}]}
+    b = Bridge(p, "/tmp/_t5.json", dry=True)
+    b.simulate("event.x_action", "single"); b.engine.cycle(1.0)
+    assert b.engine.out["_pt0"]["Sv"] == 1
+    b.engine.cycle(1.0); assert b.engine.out["_pt0"]["Sv"] == 0

@@ -119,6 +119,14 @@ class Bridge:
         elif v.get("kind") == "button": val = 1 if not initial else None
         if val is None: return
         self.engine.set_periphery(p["name"], val, initial)
+    def simulate(self, entity, value):
+        """Simula que una entidad de HA cambia de estado (solo localmente; no toca Home Assistant)."""
+        with self.lock:
+            old = self.states.get(entity) or {}
+            at = dict(old.get("attributes") or {})
+            if entity.startswith("event."): at["event_type"] = value
+            self.states[entity] = {"entity_id": entity, "state": value, "attributes": at}
+            if entity in self.in_map: self.push_inputs(entity)
     def set_virtual(self, vid, value):
         with self.lock:
             v = self.virt.get(vid)
@@ -286,6 +294,10 @@ def make_handler(br):
             try:
                 if self.path == "/api/project":
                     br.save(json.loads(body)); return self._send(200, {"ok": True})
+                if self.path == "/api/simulate":
+                    d = json.loads(body)
+                    if not br.dry: raise ValueError("La prueba de entradas solo está disponible en SIMULACIÓN")
+                    br.simulate(d["entity"], d.get("value")); return self._send(200, {"ok": True})
                 if self.path == "/api/virtual":
                     d = json.loads(body); br.set_virtual(d["id"], d.get("value")); return self._send(200, {"ok": True})
                 if self.path == "/api/mode":

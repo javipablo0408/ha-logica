@@ -818,10 +818,11 @@ document.querySelectorAll(".bt [data-b]").forEach(b=>b.onclick=()=>{bottomTab=b.
 let ctlSig="";
 async function putVirt(id,value){try{await api("api/virtual","PUT",{id,value})}catch(x){toast(x.message.includes("desconocida")?"Guarda y despliega primero":x.message,1)}}
 function drawControl(c){
-  const vs=S.pn.filter(p=>p.virt);const sig=JSON.stringify(vs.map(p=>[p.id,p.name,p.virt,p.min,p.max,p.step]));
+  const vs=S.pn.filter(p=>p.virt),ins=S.pn.filter(p=>p.dir==="in"&&!p.virt&&p.entity);
+  const sig=JSON.stringify([vs.map(p=>[p.id,p.name,p.virt,p.min,p.max,p.step]),ins.map(p=>[p.id,p.entity,p.name]),live?.dry]);
   const lv=id=>{const v=live?.virtual?.[id];return v!=null?v:vs.find(p=>p.id===id)?.value};
   if(sig!==ctlSig||!c.querySelector(".ctl")){ctlSig=sig;
-    if(!vs.length){c.innerHTML='<div class="help">Aquí aparecerán tus entradas virtuales (interruptores, pulsadores, deslizadores y selectores de color). Créalas en la cinta: Programación → Entradas virtuales.</div>';return}
+    if(!vs.length&&!ins.length){c.innerHTML='<div class="help">Aquí aparecerán tus entradas virtuales y las entradas de HA para probar. Créalas en la cinta: Programación.</div>';return}
     c.innerHTML='<div class="ctl"></div>';const box=c.firstChild;
     vs.forEach(p=>{const w=el("div","w");w.dataset.vid=p.id;w.innerHTML=`<b>${esc(p.name)}</b>`;
       if(p.virt==="switch"){const i=el("input");i.type="checkbox";i.checked=!!+lv(p.id);i.onchange=()=>putVirt(p.id,i.checked?1:0);w.appendChild(i)}
@@ -829,8 +830,15 @@ function drawControl(c){
       else if(p.virt==="slider"){const i=el("input");i.type="range";i.min=p.min??0;i.max=p.max??100;i.step=p.step??1;i.value=lv(p.id)??0;const t=el("span","",esc(i.value));i.oninput=()=>{t.textContent=i.value};i.onchange=()=>putVirt(p.id,Number(i.value));w.appendChild(i);w.appendChild(t)}
       else{const i=el("input");i.type="color";i.value=lv(p.id)||"#ffffff";i.style.width="100%";i.onchange=()=>putVirt(p.id,i.value);w.appendChild(i)}
       box.appendChild(w)});
+    if(ins.length){const h=el("div","w");h.style.cssText="flex-basis:100%;background:none;border:0;padding:2px 0";h.innerHTML=`<b>Probar entradas de Home Assistant</b><span style="color:var(--mute)">${live?.dry===false?"Solo disponible en SIMULACIÓN (ahora estás en ACTIVO).":"Simula un cambio de estado: no toca Home Assistant. Para un mando, escribe lo que manda al pulsar (p.ej. single)."}</span>`;box.appendChild(h);
+      ins.forEach(p=>{const w=el("div","w"),def=String(p.adapt?.equals||"").split(",")[0].trim();
+        w.innerHTML=`<b>${esc(p.name||p.entity)}</b><small style="color:var(--mute)">${esc(p.entity)}</small>`;
+        const i=el("input");i.value=def;i.placeholder="valor (single, on, 21.5…)";i.style.width="100%";
+        const bt=el("button","pbtn","Enviar");bt.style.margin="0";bt.disabled=live?.dry===false;
+        bt.onclick=async()=>{try{await api("api/simulate","PUT",{entity:p.entity,value:i.value});toast("Enviado «"+i.value+"»")}catch(x){toast(x.message,1)}};
+        w.appendChild(i);w.appendChild(bt);box.appendChild(w)})}
   }else{ // actualizar valores sin pisar lo que se está tocando
-    c.querySelectorAll(".w").forEach(w=>{const p=vs.find(x=>x.id===w.dataset.vid),i=w.querySelector("input");if(!p||!i||document.activeElement===i)return;const v=lv(p.id);if(v==null)return;
+    c.querySelectorAll(".w[data-vid]").forEach(w=>{const p=vs.find(x=>x.id===w.dataset.vid),i=w.querySelector("input");if(!p||!i||document.activeElement===i)return;const v=lv(p.id);if(v==null)return;
       if(p.virt==="switch")i.checked=!!+v;else if(p.virt==="slider"){i.value=v;w.querySelector("span").textContent=v}else if(p.virt==="color")i.value=v})}
 }
 function drawBottom(){
