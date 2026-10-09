@@ -676,12 +676,17 @@ const PROF_IN=[
  ["Sensor numérico (temperatura, potencia…)",{attribute:"",adapt:{fallback:0}},"Pasa el número tal cual; si no está disponible usa 0."],
  ["Persiana: posición (0 abierta … 100 cerrada)",{attribute:"current_position",adapt:{scale:[0,100,100,0],fallback:0}},"HA usa 100 = abierta; el motor usa 100 = cerrada, por eso se invierte."],
  ["Luz: brillo %",{attribute:"brightness",adapt:{scale:[0,255,0,100],fallback:0}},"Convierte el brillo 0–255 de HA a 0–100 %."],
+ ["Luz: temperatura de color (K)",{attribute:"color_temp_kelvin",adapt:{fallback:0}},""],
  ["Clima: temperatura actual",{attribute:"current_temperature",adapt:{}},""],
  ["Clima: consigna actual",{attribute:"temperature",adapt:{}},""],
  ["Activo cuando el estado es…",{attribute:"",adapt:{equals:"",fallback:0}},"Escribe el texto en «Activo cuando =» (p.ej. playing, heat, armed_away)."],
 ];
 const PROF_OUT=[
  ["Automático según el dominio",{service:"",service_data:null,service_when:"",adapt:{}},"light/switch: encender-apagar (la luz admite 0-100 % como brillo); cover: posición; climate: consigna; scene/script/button: se ejecutan al activarse…"],
+ ["Luz: brillo % (0 = apagar)",{service:"light.turn_on",service_data:{brightness_pct:"{v}"},service_when:"",adapt:{}},"Valor 0–100. Con 0 la luz se apaga."],
+ ["Luz: temperatura de color (K)",{service:"light.turn_on",service_data:{color_temp_kelvin:"{v}"},service_when:"",adapt:{}},"Valor en kelvin, normalmente 2000 (cálida) a 6500 (fría)."],
+ ["Luz: tono de color (0-360°)",{service:"light.turn_on",service_data:{hs_color:["{v}",100]},service_when:"",adapt:{}},"Rueda de color: 0 rojo, 120 verde, 240 azul. Saturación al 100 %; edita el JSON para cambiarla."],
+ ["Luz: color fijo (RGB) al activarse",{service:"light.turn_on",service_data:{rgb_color:[255,0,0],brightness_pct:100},service_when:"rise",adapt:{}},"Cambia los números de rgb_color en «Datos (JSON)». Úsalo con una salida por cada color/escena."],
  ["Persiana: posición (0 abierta … 100 cerrada)",{service:"",service_data:null,service_when:"",adapt:{scale_out:[0,100,100,0]}},"Convierte al 0–100 de HA (100 = abierta)."],
  ["Persiana: abrir (con pulso)",{service:"cover.open_cover",service_data:null,service_when:"rise",adapt:{}},""],
  ["Persiana: cerrar (con pulso)",{service:"cover.close_cover",service_data:null,service_when:"rise",adapt:{}},""],
