@@ -269,7 +269,7 @@ const pageOf=id=>obj(id)?.page;
 function fromProject(p){
   S={pages:p.pages?.length?p.pages:[{id:"p1",name:"Página 1"}],nodes:[],pn:[],notes:[],wires:[],consts:{},settings:p.settings||{}};
   const ui=p.ui||{}, pg0=S.pages[0].id;
-  p.blocks.forEach((b,i)=>S.nodes.push({id:b.id,type:b.type,name:b.name||"",params:b.params||{},config:b.config||null,
+  p.blocks.filter(b=>!String(b.id).startsWith("_pt")).forEach((b,i)=>S.nodes.push({id:b.id,type:b.type,name:b.name||"",params:b.params||{},config:b.config||null,
     x:ui[b.id]?.x??(60+(i%4)*288),y:ui[b.id]?.y??(60+Math.floor(i/4)*264),page:ui[b.id]?.page||pg0}));
   (p.wires||[]).forEach(([a,b])=>{const [fa,fp]=a.split(/\.(.+)/),[ta,tp]=b.split(/\.(.+)/);S.wires.push({f:fa,fp,t:ta,tp})});
   Object.entries(p.consts||{}).forEach(([k,v])=>S.consts[k]=v);
@@ -298,17 +298,21 @@ function fromProject(p){
 function toProject(){
   const used=new Set(), uniq=n=>{let k=n||"sin nombre",i=2;while(used.has(k))k=`${n} #${i++}`;used.add(k);return k};
   const blocks=S.nodes.map(n=>{const b={id:n.id,type:n.type};if(n.name)b.name=n.name;if(Object.keys(n.params).length)b.params=n.params;if(n.config)b.config=n.config;return b});
-  const isB=id=>S.nodes.some(n=>n.id===id), pnById=id=>S.pn.find(p=>p.id===id);
+  const pnById=id=>S.pn.find(p=>p.id===id);
   const per=[],wires=[],hw=[];
-  S.wires.forEach(w=>{
+  // cables directos entrada -> salida: el motor necesita un bloque, se añade uno de paso (oculto) por cada cable
+  const ws=[];S.wires.forEach((w,i)=>{if(pnById(w.f)&&pnById(w.t)){const id="_pt"+i;blocks.push({id,type:"scaler",params:{V1:0,Sv1:0,V2:1,Sv2:1}});ws.push({f:w.f,fp:w.fp,t:id,tp:"V",_o:w},{f:id,fp:"Sv",t:w.t,tp:w.tp,_o:w})}else ws.push(w)});
+  const isB=id=>blocks.some(n=>n.id===id);
+  const hws=new Set(),addHw=x=>{x=x._o||x;if(!hws.has(x)){hws.add(x);hw.push(x)}};
+  ws.forEach(w=>{
     const fp=pnById(w.f),tp=pnById(w.t);
-    if(fp&&fp.virt&&isB(w.t)){hw.push(w);const q={name:uniq(fp.virt==="color"?(fp.name||"Color")+"."+w.fp:fp.name||VK[fp.virt]),dir:"in",target:`${w.t}.${w.tp}`,vid:fp.id,role:w.fp};
+    if(fp&&fp.virt&&isB(w.t)){addHw(w);const q={name:uniq(fp.virt==="color"?(fp.name||"Color")+"."+w.fp:fp.name||VK[fp.virt]),dir:"in",target:`${w.t}.${w.tp}`,vid:fp.id,role:w.fp};
       if(fp.virt==="button")q.adapt={pulse:true};per.push(q)}
-    else if(fp&&isB(w.t)){hw.push(w);const q={name:fp.name||fp.entity,dir:"in",target:`${w.t}.${w.tp}`,entity:fp.entity};
+    else if(fp&&isB(w.t)){addHw(w);const q={name:fp.name||fp.entity,dir:"in",target:`${w.t}.${w.tp}`,entity:fp.entity};
       if(fp.attribute)q.attribute=fp.attribute;if(Object.keys(fp.adapt||{}).length)q.adapt=fp.adapt;per.push(q)}
-    else if(tp&&tp.rgb&&isB(w.f)){hw.push(w);const q={name:uniq((tp.name||tp.entity)+"."+w.tp),dir:"out",target:`${w.f}.${w.fp}`,entity:tp.entity,group:tp.id,role:w.tp};
+    else if(tp&&tp.rgb&&isB(w.f)){addHw(w);const q={name:uniq((tp.name||tp.entity)+"."+w.tp),dir:"out",target:`${w.f}.${w.fp}`,entity:tp.entity,group:tp.id,role:w.tp};
       if(w.tp!=="br"&&tp.adapt?.scale_out)q.adapt={scale_out:tp.adapt.scale_out};per.push(q)}
-    else if(tp&&isB(w.f)){hw.push(w);const q={name:uniq(tp.name||tp.entity),dir:"out",target:`${w.f}.${w.fp}`,entity:tp.entity};
+    else if(tp&&isB(w.f)){addHw(w);const q={name:uniq(tp.name||tp.entity),dir:"out",target:`${w.f}.${w.fp}`,entity:tp.entity};
       if(tp.service)q.service=tp.service;if(tp.service_data)q.service_data=tp.service_data;if(tp.service_when)q.service_when=tp.service_when;if(Object.keys(tp.adapt||{}).length)q.adapt=tp.adapt;per.push(q)}
     else if(isB(w.f)&&isB(w.t))wires.push([`${w.f}.${w.fp}`,`${w.t}.${w.tp}`]);
   });
@@ -334,7 +338,7 @@ const RIB={
           ["Selección",[["▦","Seleccionar todo",selAll],["✕","Eliminar",delSel,"sel"],["⌕","Buscar (Ctrl+F)",openSearch]]],
           ["Alinear",[["⇤","Izquierda",()=>align("x"),"sel2"],["⇡","Arriba",()=>align("y"),"sel2"],["⇥","Derecha",()=>align("r"),"sel2"]]]],
  programacion:[["Insertar",[["▣","Bloque de función (Ctrl+B)",()=>openPicker("bloque")],["▤","Comentario",addNote],["➕","Página nueva",newPage]]],
-               ["Periferia",[["⇥","Entrada de HA",()=>openPicker("in")],["⇤","Salida de HA",()=>openPicker("out")],["◐","Salida luz RGB",()=>openPicker("rgb")]]],["Entradas virtuales",[["⏻","Interruptor",()=>addVirt("switch")],["●","Pulsador",()=>addVirt("button")],["▭","Deslizador",()=>addVirt("slider")],["🎨","Selector de color",()=>addVirt("color")]]],
+               ["Periferia",[["⇥","Entrada de HA",()=>openPicker("in")],["⇤","Salida de HA",()=>openPicker("out")],["◐","Luz RGB completa",()=>openPicker("rgb")]]],["Entradas virtuales",[["⏻","Interruptor",()=>addVirt("switch")],["●","Pulsador",()=>addVirt("button")],["▭","Deslizador",()=>addVirt("slider")],["🎨","Selector de color",()=>addVirt("color")]]],
                ["Página",[["✎","Renombrar",()=>renamePage(cur)],["🗑","Eliminar página",()=>delPage(cur),"pages"]]]],
  monitor:[["Home Assistant",[["▶","Modo activo / simulación",toggleMode,"mode"],["⟳","Recargar entidades",refreshEnt]]],
           ["Monitor",[["◉","Valores en el lienzo",()=>{monitorOn=!monitorOn;lsSet("mon",monitorOn?"1":"0");refreshRibbon();updateLive()},"mon"],["≣","Registro",()=>{bottomTab="log";setBottomMin(false);drawBottom()}]]]]
@@ -530,7 +534,6 @@ function startWire(ev,pin){
     const t=document.elementFromPoint(m.clientX,m.clientY)?.closest?.(".pin");if(!t){fullRender();return}
     const o=from.dir==="o"?from:{node:t.dataset.node,port:t.dataset.port,dir:t.dataset.dir},i=from.dir==="o"?{node:t.dataset.node,port:t.dataset.port,dir:t.dataset.dir}:from;
     if(o.dir!=="o"||i.dir!=="i"||o.node===i.node){fullRender();return}
-    if(S.pn.some(p=>p.id===o.node)&&S.pn.some(p=>p.id===i.node)){msg("Una entrada de HA no puede ir directa a una salida de HA: pon un bloque en medio",1);toast("Pon un bloque entre una entrada y una salida",1);fullRender();return}
     S.wires=S.wires.filter(w=>!(w.t===i.node&&w.tp===i.port));S.wires.push({f:o.node,fp:o.port,t:i.node,tp:i.port});touch();fullRender()};
   addEventListener("mousemove",mv);addEventListener("mouseup",up);
 }
@@ -557,6 +560,12 @@ function addHA(dir,entity,at,rgb){const p=at||center(),e=ENT.find(x=>x.id===enti
   const n={id:"ha"+(nextId++),dir,name:e?.name||entity||"",entity:entity||"",attribute:"",adapt:dir==="in"?{fallback:0}:{},service:"",x:p.x,y:p.y,page:cur};
   if(rgb){n.rgb=true;n.adapt={scale_out:[0,100,0,255]}}S.pn.push(n);touch();fullRender();setSel([n.id])}
 function addVirt(kind,at){const p=at&&at.x!==undefined?at:center(),n={id:"ha"+(nextId++),dir:"in",virt:kind,name:VK[kind],entity:"",attribute:"",adapt:{},value:kind==="switch"?0:kind==="slider"?0:kind==="color"?"#ffffff":null,min:0,max:100,step:1,x:p.x,y:p.y,page:cur};S.pn.push(n);touch();fullRender();setSel([n.id])}
+function addRgbKit(entity,at){const p=at&&at.x!==undefined?at:center(),en=ENT.find(x=>x.id===entity),nm=en?.name||entity;
+  const mk=(kind,name,x,y,extra)=>({id:"ha"+(nextId++),dir:"in",virt:kind,name,entity:"",attribute:"",adapt:{},min:0,max:100,step:1,x,y,page:cur,...extra});
+  const col=mk("color","Color "+nm,p.x,p.y,{value:"#ffffff"}),br=mk("slider","Brillo "+nm,p.x,p.y+130,{value:100});
+  const o={id:"ha"+(nextId++),dir:"out",rgb:true,name:nm,entity,attribute:"",adapt:{scale_out:[0,100,0,255]},service:"",x:p.x+340,y:p.y,page:cur};
+  S.pn.push(col,br,o);[["r"],["g"],["b"]].forEach(([k])=>S.wires.push({f:col.id,fp:k,t:o.id,tp:k}));S.wires.push({f:br.id,fp:"v",t:o.id,tp:"br"});
+  touch();fullRender();setSel([o.id]);toast("Luz RGB creada: guarda y despliega, y usa la pestaña Control");}
 function addNote(at){const p=(at&&at.x!==undefined)?at:center(),t=prompt("Texto del comentario","");if(t===null)return;const n={id:"n"+(nextId++),text:t,x:p.x,y:p.y,page:cur};S.notes.push(n);touch();fullRender();setSel([n.id])}
 function delSel(){if(!sel.size)return;const ids=sel;S.nodes=S.nodes.filter(n=>!ids.has(n.id));S.pn=S.pn.filter(n=>!ids.has(n.id));S.notes=S.notes.filter(n=>!ids.has(n.id));
   S.wires=S.wires.filter(w=>!ids.has(w.f)&&!ids.has(w.t));Object.keys(S.consts).forEach(k=>{if(ids.has(k.split(".")[0]))delete S.consts[k]});sel=new Set();touch();fullRender()}
@@ -637,7 +646,7 @@ vw.addEventListener("drop",e=>{e.preventDefault();const t=e.dataTransfer.getData
 
 /* ---------- selector modal (insertar / buscar) ---------- */
 let pickMode="bloque",pickAt=null,pickCat="";
-function openPicker(mode,at){pickMode=mode;pickAt=at&&at.x!==undefined?at:null;pickCat="";$("#mt").textContent=mode==="bloque"?"Insertar bloque de función":mode==="in"?"Entrada de Home Assistant":mode==="out"?"Salida de Home Assistant":mode==="rgb"?"Salida de luz RGB (elige una luz)":"Buscar en el proyecto";
+function openPicker(mode,at){pickMode=mode;pickAt=at&&at.x!==undefined?at:null;pickCat="";$("#mt").textContent=mode==="bloque"?"Insertar bloque de función":mode==="in"?"Entrada de Home Assistant":mode==="out"?"Salida de Home Assistant":mode==="rgb"?"Luz RGB: elige la luz (se crea con su color y brillo)":"Buscar en el proyecto";
   $("#modal").style.display="flex";$("#mq").value="";$("#mq").focus();drawPicker()}
 function openSearch(){openPicker("buscar")}
 function closeModal(){$("#modal").style.display="none"}
@@ -659,7 +668,7 @@ function drawPicker(){
   }else{
     mc.innerHTML='<div class="it" style="cursor:default">Entidades</div>';
     ENT.filter(e=>(pickMode==="in"||(pickMode==="rgb"?e.domain==="light":OUT_DOM.has(e.domain)))&&(!q||(e.id+e.name+e.area+(e.device||"")).toLowerCase().includes(q))).slice(0,300)
-     .forEach(e=>{const d=el("div","it",`<span>${esc(e.name)}</span><small>${esc(e.id)}${e.device?" · "+esc(e.device):e.area?" · "+esc(e.area):""}</small>`);d.onclick=()=>{closeModal();addHA(pickMode==="rgb"?"out":pickMode,e.id,pickAt,pickMode==="rgb")};ml.appendChild(d)});
+     .forEach(e=>{const d=el("div","it",`<span>${esc(e.name)}</span><small>${esc(e.id)}${e.device?" · "+esc(e.device):e.area?" · "+esc(e.area):""}</small>`);d.onclick=()=>{closeModal();pickMode==="rgb"?addRgbKit(e.id,pickAt):addHA(pickMode,e.id,pickAt)};ml.appendChild(d)});
   }
 }
 
