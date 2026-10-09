@@ -23,7 +23,7 @@ html,body{height:100%;margin:0;background:var(--chrome);color:var(--text);font:1
 button,input,select,textarea{font:inherit;color:inherit}
 input,select,textarea{background:var(--blk);border:1px solid var(--line);border-radius:3px;padding:3px 6px;min-width:0}
 input:focus,select:focus,textarea:focus{outline:1px solid var(--sel);border-color:var(--sel)}
-#app{display:grid;grid-template-rows:auto auto 1fr auto auto;height:100%}
+#app{display:grid;grid-template-rows:auto auto auto minmax(0,1fr) auto auto;height:100%}
 
 /* título */
 #title{display:flex;align-items:center;gap:10px;padding:3px 10px;background:var(--chrome2);border-bottom:1px solid var(--line);font-size:12px}
@@ -35,7 +35,7 @@ input:focus,select:focus,textarea:focus{outline:1px solid var(--sel);border-colo
 #tabs{display:flex;background:var(--chrome2);padding:0 6px;gap:2px;border-bottom:1px solid var(--line)}
 #tabs button{border:0;background:none;padding:5px 14px;cursor:pointer;border-radius:3px 3px 0 0;color:var(--mute)}
 #tabs button.on{background:var(--chrome);color:var(--text);box-shadow:inset 0 2px var(--acc)}
-#ribbon{display:flex;background:var(--chrome);border-bottom:1px solid var(--line);min-height:68px;padding:4px 6px;gap:2px;align-items:stretch}
+#ribbon{display:flex;max-height:92px;overflow:hidden;background:var(--chrome);border-bottom:1px solid var(--line);min-height:68px;padding:4px 6px;gap:2px;align-items:stretch}
 .grp{display:flex;gap:2px;padding:0 6px;border-right:1px solid var(--line);position:relative;padding-bottom:14px}
 .grp:last-child{border-right:0}
 .grp>span.gl{position:absolute;bottom:0;left:0;right:0;text-align:center;color:var(--mute);font-size:10.5px}
@@ -135,6 +135,7 @@ table.pt2 input:hover,table.pt2 input:focus{border-color:var(--line);background:
 /* inferior */
 #bottom{background:var(--chrome);border-top:1px solid var(--line);display:flex;flex-direction:column;height:var(--hb,150px);min-height:0}
 #bottom.min{height:26px}
+#app.rmin #ribbon{display:none}
 .bt{display:flex;background:var(--chrome2);border-bottom:1px solid var(--line)}
 .bt button{border:0;background:none;padding:3px 12px;cursor:pointer;color:var(--mute)}
 .bt button.on{color:var(--text);box-shadow:inset 0 -2px var(--acc)}
@@ -321,7 +322,9 @@ const RIB={
 };
 let monitorOn=lsGet("mon","1")==="1", clip=null;
 const RT={proyecto:"Proyecto",edicion:"Edición",programacion:"Programación",monitor:"Monitor"};
-function drawTabs(){const t=$("#tabs");t.innerHTML="";Object.keys(RT).forEach(k=>{const b=el("button",k===ribTab?"on":"",RT[k]);b.onclick=()=>{ribTab=k;drawTabs();drawRibbon()};t.appendChild(b)})}
+function drawTabs(){const t=$("#tabs");t.innerHTML="";Object.keys(RT).forEach(k=>{const b=el("button",k===ribTab?"on":"",RT[k]);b.onclick=()=>{ribTab=k;drawTabs();drawRibbon();setRib(false)};b.ondblclick=()=>setRib(!$("#app").classList.contains("rmin"));t.appendChild(b)});
+  const c=el("button","","▴");c.title="Ocultar/mostrar la cinta (o doble clic en una pestaña)";c.style.marginLeft="auto";c.id="rmin";c.onclick=()=>setRib(!$("#app").classList.contains("rmin"));t.appendChild(c);setRib(lsGet("rmin","0")==="1")}
+function setRib(m){$("#app").classList.toggle("rmin",m);lsSet("rmin",m?"1":"0");const c=$("#rmin");if(c)c.textContent=m?"▾":"▴";if(typeof applyView==="function")setTimeout(applyView,50)}
 function drawRibbon(){
   const r=$("#ribbon");r.innerHTML="";
   RIB[ribTab].forEach(([gl,btns])=>{const g=el("div","grp");
