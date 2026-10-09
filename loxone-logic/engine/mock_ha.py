@@ -14,10 +14,10 @@ async def h(ws):
         last = m["id"]
         if m["type"]=="get_states": await ws.send(json.dumps({"id":m["id"],"type":"result","success":True,"result":STATES}))
         elif m["type"]=="config/area_registry/list": await ws.send(json.dumps({"id":m["id"],"type":"result","success":True,"result":[{"area_id":"salon","name":"Salón"},{"area_id":"pasillo","name":"Pasillo"}]}))
-        elif m["type"]=="config/device_registry/list": await ws.send(json.dumps({"id":m["id"],"type":"result","success":True,"result":[]}))
+        elif m["type"]=="config/device_registry/list": await ws.send(json.dumps({"id":m["id"],"type":"result","success":True,"result":[{"id":"d1","name":"Luz del pasillo (Shelly)","area_id":"pasillo"},{"id":"d2","name":"Sensor presencia","name_by_user":"Presencia pasillo","area_id":"pasillo"}]}))
         elif m["type"]=="config/entity_registry/list": await ws.send(json.dumps({"id":m["id"],"type":"result","success":True,"result":[
             {"entity_id":"light.salon","area_id":"salon"},{"entity_id":"cover.persiana_salon","area_id":"salon"},{"entity_id":"sensor.temp_salon","area_id":"salon"},
-            {"entity_id":"light.pasillo","area_id":"pasillo"},{"entity_id":"binary_sensor.presencia_pasillo","area_id":"pasillo"}]}))
+            {"entity_id":"light.pasillo","device_id":"d1"},{"entity_id":"binary_sensor.presencia_pasillo","device_id":"d2"}]}))
         elif m["type"]=="get_config": await ws.send(json.dumps({"id":m["id"],"type":"result","success":True,"result":{"latitude":40.2,"longitude":-3.7,"time_zone":"Europe/Madrid"}}))
         elif m["type"]=="subscribe_events":
             async def later():

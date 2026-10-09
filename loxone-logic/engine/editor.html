@@ -560,7 +560,7 @@ function delPage(id){if(S.pages.length<2)return toast("Debe quedar al menos una 
 
 /* ---------- árbol de proyecto ---------- */
 const OUT_DOM=new Set(["light","switch","cover","climate","fan","input_boolean","input_number","input_select","input_text","number","select","text","scene","script","button","lock","media_player","siren","humidifier","valve","water_heater","vacuum","automation","alarm_control_panel","input_button"]);
-let openN=new Set(JSON.parse(lsGet("open",'["ha","ha:in","pg","bl"]'))), treeMode=lsGet("tmode","tipo");
+let openN=new Set(JSON.parse(lsGet("open",'["ha","ha:in","pg","bl"]'))), treeMode=lsGet("tmode","dispositivo");
 const saveOpen=()=>lsSet("open",JSON.stringify([...openN]));
 function usedEnt(dir){return new Set(S.pn.filter(p=>p.dir===dir).map(p=>p.entity))}
 function drawTree(){
@@ -573,15 +573,16 @@ function drawTree(){
   // Home Assistant
   const ha=node("ha","Home Assistant",0,{ic:"ha",badge:ENT.length});
   if(ha.open)for(const dir of ["in","out"]){
-    const list=ENT.filter(e=>(dir==="in"||OUT_DOM.has(e.domain))&&(!q||(e.id+e.name+e.area).toLowerCase().includes(q)));
+    const list=ENT.filter(e=>(dir==="in"||OUT_DOM.has(e.domain))&&(!q||(e.id+e.name+e.area+(e.device||"")).toLowerCase().includes(q)));
     const k=node("ha:"+dir,dir==="in"?"Entradas (leer estado)":"Salidas (controlar)",1,{ic:dir,badge:list.length});
     if(!k.open)continue;
-    const mode=el("div","tn");mode.style.setProperty("--d",2);mode.innerHTML=`<span class="tx" style="color:var(--mute);font-size:11px">Agrupar: <a href="#" data-m="tipo" style="${treeMode==="tipo"?"font-weight:700;color:var(--text)":""}">tipo</a> · <a href="#" data-m="area" style="${treeMode==="area"?"font-weight:700;color:var(--text)":""}">área</a></span>`;
+    const mode=el("div","tn");mode.style.setProperty("--d",2);mode.innerHTML=`<span class="tx" style="color:var(--mute);font-size:11px">Agrupar: ${[["dispositivo","dispositivo"],["area","área"],["tipo","tipo"]].map(([m,l])=>`<a href="#" data-m="${m}" style="${treeMode===m?"font-weight:700;color:var(--text)":""}">${l}</a>`).join(" · ")}</span>`;
     mode.querySelectorAll("a").forEach(a=>a.onclick=ev=>{ev.preventDefault();treeMode=a.dataset.m;lsSet("tmode",treeMode);drawTree()});box.appendChild(mode);
-    const groups={};list.forEach(e=>{const g=treeMode==="area"?(e.area||"(sin área)"):e.domain;(groups[g]??=[]).push(e)});
+    const gof=e=>treeMode==="area"?(e.area||"(sin área)"):treeMode==="tipo"?e.domain:(e.device||"(sin dispositivo: ayudantes, grupos…)");
+    const groups={};list.forEach(e=>{(groups[gof(e)]??=[]).push(e)});
     const used=usedEnt(dir);
     Object.keys(groups).sort().forEach(g=>{const gk=`ha:${dir}:${g}`,gn=node(gk,g,2,{badge:groups[g].length});if(!gn.open)return;
-      groups[g].forEach(e=>{const l=node("e:"+dir+e.id,e.name,3,{leaf:true,ic:dir,used:used.has(e.id),title:`${e.id} · ${e.state}`,badge:treeMode==="area"?e.domain:undefined});
+      groups[g].forEach(e=>{const l=node("e:"+dir+e.id,e.name,3,{leaf:true,ic:dir,used:used.has(e.id),title:`${e.id} · ${e.state}`,badge:treeMode==="tipo"?undefined:e.domain});
         l.n.draggable=true;l.n.ondragstart=ev=>{ev.dataTransfer.setData("text/plain",`ent:${dir}:${e.id}`)};l.n.ondblclick=()=>addHA(dir,e.id)})});
   }
   // Programación
@@ -624,8 +625,8 @@ function drawPicker(){
         const d=el("div","it",`<span>${esc(r.t)}</span><small>${esc(r.s)} · ${esc(pg)}</small>`);d.onclick=()=>{closeModal();if(r.o.page!==cur){cur=r.o.page;fullRender()}setSel([r.o.id]);view.x=vw.clientWidth/2-r.o.x*view.k-80;view.y=vw.clientHeight/2-r.o.y*view.k-40;applyView();drawWires()};ml.appendChild(d)});
   }else{
     mc.innerHTML='<div class="it" style="cursor:default">Entidades</div>';
-    ENT.filter(e=>(pickMode==="in"||OUT_DOM.has(e.domain))&&(!q||(e.id+e.name+e.area).toLowerCase().includes(q))).slice(0,300)
-     .forEach(e=>{const d=el("div","it",`<span>${esc(e.name)}</span><small>${esc(e.id)}${e.area?" · "+esc(e.area):""}</small>`);d.onclick=()=>{closeModal();addHA(pickMode,e.id,pickAt)};ml.appendChild(d)});
+    ENT.filter(e=>(pickMode==="in"||OUT_DOM.has(e.domain))&&(!q||(e.id+e.name+e.area+(e.device||"")).toLowerCase().includes(q))).slice(0,300)
+     .forEach(e=>{const d=el("div","it",`<span>${esc(e.name)}</span><small>${esc(e.id)}${e.device?" · "+esc(e.device):e.area?" · "+esc(e.area):""}</small>`);d.onclick=()=>{closeModal();addHA(pickMode,e.id,pickAt)};ml.appendChild(d)});
   }
 }
 

@@ -69,7 +69,7 @@ class Bridge:
         self.lock = threading.RLock()
         self.states = {}; self.mid = 0; self.connected = False
         self.calls = collections.deque(maxlen=200); self.err = None
-        self.ws = None; self.loop_ = None; self.ha_cfg = {}; self.ent_area = {}
+        self.ws = None; self.loop_ = None; self.ha_cfg = {}; self.ent_area = {}; self.ent_dev = {}
         self.load(project)
     # ---------- proyecto
     def load(self, project, snap=None):
@@ -181,6 +181,8 @@ class Bridge:
                             with self.lock:
                                 self.ent_area = {e["entity_id"]: areas.get(e.get("area_id") or dev.get(e.get("device_id")), "")
                                                  for e in reg[eid]}
+                                dn = {d["id"]: d.get("name_by_user") or d.get("name") or "" for d in reg[did]}
+                                self.ent_dev = {e["entity_id"]: dn.get(e.get("device_id"), "") for e in reg[eid] if e.get("device_id")}
                     elif m.get("id") == gid and m.get("type") == "result":
                         if not m.get("success"): raise OSError(f"get_states falló: {m.get('error')}")
                         with self.lock:
@@ -208,7 +210,7 @@ class Bridge:
                            for p in self.project.get("periphery", []) if p["dir"] == "in"}}
     def api_entities(self):
         with self.lock:
-            return [{"id": e, "name": (s.get("attributes") or {}).get("friendly_name", e), "state": s.get("state"), "domain": e.split(".")[0], "area": self.ent_area.get(e, "")}
+            return [{"id": e, "name": (s.get("attributes") or {}).get("friendly_name", e), "state": s.get("state"), "domain": e.split(".")[0], "area": self.ent_area.get(e, ""), "device": self.ent_dev.get(e, "")}
                     for e, s in sorted(self.states.items()) if s]
 
 def make_handler(br):
