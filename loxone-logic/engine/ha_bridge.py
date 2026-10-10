@@ -48,17 +48,33 @@ def service_for(entity, value, explicit=None, data=None):
     if dom in ("button", "input_button"): return t("press") if v else None
     return None
 
-def rgb_for(entity, vals):
-    """Canales r,g,b (0-255) y brillo opcional (0-100) -> una sola llamada light.* ."""
+COLOR_MODES = {"hs", "xy", "rgb", "rgbw", "rgbww"}
+
+def light_caps(attrs):
+    """Qué admite una luz según supported_color_modes de HA (None = aún no se sabe)."""
+    m = set((attrs or {}).get("supported_color_modes") or [])
+    if not m: return None
+    return {"color": bool(m & COLOR_MODES), "temp": "color_temp" in m or "rgbww" in m, "bri": bool(m - {"onoff"}),
+            "tmin": (attrs or {}).get("min_color_temp_kelvin") or 2000, "tmax": (attrs or {}).get("max_color_temp_kelvin") or 6500}
+
+def rgb_for(entity, vals, attrs=None):
+    """Canales r,g,b (0-255), brillo (0-100) y/o temperatura (ct=1, k 0-100: cálido→frío) -> UNA llamada light.*,
+    adaptada a lo que admite la luz (attrs = atributos de HA; sin ellos se asume que admite todo)."""
     c = lambda x: int(max(0, min(255, round(float(x or 0)))))
     r, g, b = c(vals.get("r")), c(vals.get("g")), c(vals.get("b"))
-    br = vals.get("br")
+    br = vals.get("br"); caps = light_caps(attrs)
     if br is not None:
         if float(br or 0) <= 0: return ("light", "turn_off", {"entity_id": entity})
+    elif (r, g, b) == (0, 0, 0) and not vals.get("ct"): return ("light", "turn_off", {"entity_id": entity})
+    d = {"entity_id": entity}
+    if vals.get("ct") and (caps is None or caps["temp"]):
+        k = max(0.0, min(100.0, float(vals.get("k") or 0))) / 100
+        lo, hi = (caps["tmin"], caps["tmax"]) if caps else (2000, 6500)
+        d["color_temp_kelvin"] = int(round(lo + k * (hi - lo)))
+    elif caps is None or caps["color"]:
         if (r, g, b) == (0, 0, 0): r = g = b = 255          # con brillo conectado, color sin elegir = blanco
-    elif (r, g, b) == (0, 0, 0): return ("light", "turn_off", {"entity_id": entity})
-    d = {"entity_id": entity, "rgb_color": [r, g, b]}
-    if br is not None: d["brightness_pct"] = int(max(1, min(100, round(float(br)))))
+        d["rgb_color"] = [r, g, b]
+    if br is not None and (caps is None or caps["bri"]): d["brightness_pct"] = int(max(1, min(100, round(float(br)))))
     return ("light", "turn_on", d)
 
 def state_value(st, attribute=None):
@@ -191,7 +207,7 @@ class Bridge:
                     if c: pending.append((c, name))
                 for g in dirty:
                     mem = [q for q in self.out_map.values() if q.get("group") == g]
-                    pending.append((rgb_for(mem[0]["entity"], {q["role"]: self.last_out.get(q["name"]) for q in mem}), g))
+                    pending.append((rgb_for(mem[0]["entity"], {q["role"]: self.last_out.get(q["name"]) for q in mem}, (self.states.get(mem[0]["entity"]) or {}).get("attributes")), g))
                 self.first = False
                 for ev in self.ctx.events:
                     c = self.notify_call(ev)
@@ -297,8 +313,9 @@ class Bridge:
                     e = cfg["entity"]; stt, at = ent(e)
                     room(self.ent_area.get(e))["controls"].append({"id": bid, "type": "ha-light", "cat": 0,
                         "name": bl.get("name") or at.get("friendly_name") or self.ent_dev.get(e) or e, "entity": e,
-                        "mode": cfg.get("mode", "rgb"), "on": bool(out.get("O")), "scene": out.get("M", 0), "br": out.get("Br") or 0,
-                        "rgb": at.get("rgb_color") if stt == "on" else None,
+                        "caps": light_caps(at) or {"color": False, "temp": False, "bri": True, "tmin": 2000, "tmax": 6500},
+                        "on": bool(out.get("O")), "scene": out.get("M", 0), "br": out.get("Br") or 0,
+                        "k": out.get("K", 50), "ct": bool(out.get("Ct")), "rgb": at.get("rgb_color") if stt == "on" else None,
                         "scenes": [{"id": int(s["id"]), "name": s.get("name") or f"Escena {s['id']}"} for s in cfg.get("scenes", [])]})
             used = set()
             for n in nodes:
@@ -313,7 +330,7 @@ class Bridge:
             for r in rs: r["controls"].sort(key=lambda c: (c.get("cat", 9), str(c.get("name")).lower()))
             return {"dry": self.dry, "connected": self.connected, "rooms": rs}
     def block_cmd(self, block, port, value):
-        if port not in ("Tg", "On", "Off", "Scene", "Br"): raise ValueError(f"orden no permitida: {port}")
+        if port not in ("Tg", "On", "Off", "Scene", "Br", "Col", "Temp"): raise ValueError(f"orden no permitida: {port}")
         with self.lock:
             if (self.engine.project_types or {}).get(block) != "ha-light": raise KeyError(f"no es un bloque de luz: {block}")
             self.engine.inject(block, port, value)

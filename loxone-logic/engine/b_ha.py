@@ -9,24 +9,34 @@ EV_DEFAULT = {
     "EL": "hold,long_press,long,1_long_press,button_1_hold,button_1_long_press",
 }
 
+def _hex_to_pct(v):
+    """'#rrggbb' o [r,g,b] 0-255 -> [r,g,b] 0-100."""
+    if isinstance(v, str):
+        s = v.lstrip("#"); s = (s + "ffffff")[:6] if len(s) < 6 else s[:6]; v = [int(s[k:k + 2], 16) for k in (0, 2, 4)]
+    return [round(clamp(x, 0, 255) * 100 / 255, 1) for x in v]
+
 @block("ha-light")
 class HaLight(Block):
-    """Luz de HA (on/off, regulable o RGB) con escenas. Entradas: Tg alternar, On, Off, Scene (nº; 0 = apagar),
-    Br (brillo 0-100), S (estado real de la luz, lo cablea expand()). Salidas: O, M (escena), R, G, B, Br."""
-    STATE = ("on", "scene", "br", "rgb", "last")
+    """Luz de HA (Zigbee, Z-Wave, ESPHome…): on/off, brillo, color, blanco por temperatura y escenas.
+    Entradas: Tg alternar, On, Off, Scene (nº; 0 = apagar), Br (0-100), Col ('#rrggbb'), Temp (0 cálido … 100 frío),
+    S (estado real de la luz; lo cablea expand()). Salidas: O, M (escena), Br, Ct (1 = blanco por temperatura), K.
+    Lo que se envía se adapta a lo que admite la luz (ver rgb_for)."""
+    STATE = ("on", "scene", "br", "rgb", "last", "ct", "k")
     def init(self):
         c = self.cfg
         self.scenes = {int(s["id"]): s for s in c.get("scenes", [])}
-        self.on = 0; self.scene = 0; self.br = 100; self.rgb = [100, 100, 100]
+        self.on = 0; self.scene = 0; self.br = 100; self.rgb = [100, 100, 100]; self.ct = 0; self.k = 50
         self.last = min(self.scenes) if self.scenes else 0
-        self.sprev = None; self.scprev = None; self.brprev = None; self.t = 0.0; self.cmd_t = -99.0
+        self.sprev = None; self.scprev = None; self.brprev = None; self.colprev = None; self.tprev = None
+        self.t = 0.0; self.cmd_t = -99.0
     def _cmd(self): self.cmd_t = self.t
     def _apply(self, sid):
         if sid in (0, None): self.on = 0; self.scene = 0; self._cmd(); return
         s = self.scenes.get(int(sid))
         if s is None: return
         self.scene = int(sid); self.last = self.scene; self.on = 1
-        if s.get("rgb"): self.rgb = [clamp(v, 0, 100) for v in s["rgb"]]
+        if s.get("temp") is not None: self.ct = 1; self.k = clamp(s["temp"], 0, 100)
+        elif s.get("rgb"): self.ct = 0; self.rgb = [clamp(v, 0, 100) for v in s["rgb"]]
         self.br = clamp(s.get("br", 100), 1, 100); self._cmd()
     def _turn_on(self):
         if self.last in self.scenes: self._apply(self.last)
@@ -53,8 +63,16 @@ class HaLight(Block):
             else: self.br = clamp(b, 1, 100); self.on = 1; self.scene = 0
             self._cmd()
         self.brprev = b
+        col = i.get("Col"); ckey = str(col) if col is not None else None
+        if ckey is not None and ckey != self.colprev:
+            self.rgb = _hex_to_pct(col); self.ct = 0; self.on = 1; self.scene = 0; self._cmd()
+        self.colprev = ckey
+        tp = i.get("Temp")
+        if tp is not None and tp != self.tprev:
+            self.k = clamp(tp, 0, 100); self.ct = 1; self.on = 1; self.scene = 0; self._cmd()
+        self.tprev = tp
         r, gg, bb = self.rgb
-        return {"O": self.on, "M": self.scene, "R": r, "G": gg, "B": bb, "Br": self.br if self.on else 0}
+        return {"O": self.on, "M": self.scene, "R": r, "G": gg, "B": bb, "Br": self.br if self.on else 0, "Ct": self.ct, "K": self.k}
 
 @block("scaler")
 class Scaler(Block):
@@ -78,14 +96,10 @@ def expand(project):
         if not e: continue
         if b["type"] == "ha-light":
             per.append({"name": f"{bid}·estado", "dir": "in", "target": f"{bid}.S", "entity": e, "adapt": {"equals": "on"}})
-            mode = c.get("mode", "rgb")
-            if mode == "rgb":
-                for role, port in (("r", "R"), ("g", "G"), ("b", "B"), ("br", "Br")):
-                    q = {"name": f"{bid}·{role}", "dir": "out", "target": f"{bid}.{port}", "entity": e, "group": bid, "role": role}
-                    if role != "br": q["adapt"] = {"scale_out": [0, 100, 0, 255]}
-                    per.append(q)
-            elif mode == "dim": per.append({"name": f"{bid}·br", "dir": "out", "target": f"{bid}.Br", "entity": e})
-            else: per.append({"name": f"{bid}·on", "dir": "out", "target": f"{bid}.O", "entity": e})
+            for role, port in (("r", "R"), ("g", "G"), ("b", "B"), ("br", "Br"), ("ct", "Ct"), ("k", "K")):
+                q = {"name": f"{bid}·{role}", "dir": "out", "target": f"{bid}.{port}", "entity": e, "group": bid, "role": role}
+                if role in "rgb": q["adapt"] = {"scale_out": [0, 100, 0, 255]}
+                per.append(q)
         elif b["type"] == "ha-remote":
             ev = {**EV_DEFAULT, **(c.get("events") or {})}
             for port in ("E1", "E2", "EL"):

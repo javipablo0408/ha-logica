@@ -34,6 +34,9 @@ main{padding:4px 16px 40px;display:grid;grid-template-columns:repeat(auto-fill,m
 .sw input:checked+i{background:var(--acc);border-color:var(--acc)}
 .sw input:checked+i:after{left:27px;background:#fff}
 input[type=range]{width:100%;accent-color:var(--acc);height:32px}
+input.ct{-webkit-appearance:none;appearance:none;background:linear-gradient(90deg,#ffb25e,#fff,#9cc8ff);border-radius:7px;height:14px;margin:9px 0}
+input.ct::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;border-radius:50%;background:#fff;border:2px solid #8d95a3;box-shadow:0 1px 4px #0004}
+input.ct::-moz-range-thumb{width:24px;height:24px;border-radius:50%;background:#fff;border:2px solid #8d95a3}
 input[type=color]{width:100%;height:44px;border:1px solid var(--ln);border-radius:12px;background:var(--card2);padding:3px}
 .sw2{display:flex;align-items:center;justify-content:space-between}
 .row{display:flex;justify-content:space-between;color:var(--mut);margin-bottom:2px}
@@ -74,8 +77,12 @@ function card(c){
     d.querySelector("input").onchange=()=>cmd(c.id,"Tg",1);
     if(c.scenes.length){const w=document.createElement("div");w.className="sc";
       c.scenes.forEach(s=>{const b=document.createElement("button");b.textContent=s.name;if(c.on&&+c.scene===+s.id)b.className="on";b.onclick=()=>cmd(c.id,"Scene",s.id);w.appendChild(b)});d.appendChild(w)}
-    if(c.mode!=="onoff"){const w=document.createElement("div");w.innerHTML=`<div class="row"><span>Brillo</span><small>${Math.round(c.br)}%</small></div><input type="range" min="1" max="100" step="1" value="${Math.max(1,Math.round(c.br||100))}">`;
+    if(c.caps.bri){const w=document.createElement("div");w.innerHTML=`<div class="row"><span>Brillo</span><small>${Math.round(c.br)}%</small></div><input type="range" min="1" max="100" step="1" value="${Math.max(1,Math.round(c.br||100))}">`;
       const i=w.querySelector("input"),s=w.querySelector("small");i.oninput=()=>s.textContent=i.value+"%";i.onchange=()=>cmd(c.id,"Br",Number(i.value));d.appendChild(w)}
+    if(c.caps.temp){const w=document.createElement("div");w.innerHTML=`<div class="row"><span>Blanco</span><small>cálido ↔ frío</small></div><input type="range" class="ct" min="0" max="100" step="1" value="${Math.round(c.k)}">`;
+      w.querySelector("input").onchange=e=>cmd(c.id,"Temp",Number(e.target.value));d.appendChild(w)}
+    if(c.caps.color){const w=document.createElement("div");w.innerHTML=`<div class="row"><span>Color</span></div><input type="color" value="${hex(c.rgb||[255,255,255])}">`;
+      w.querySelector("input").onchange=e=>cmd(c.id,"Col",e.target.value);d.appendChild(w)}
   }else if(c.type==="lighting"){
     const col=c.on&&c.rgb?hex(c.rgb):"";
     d.innerHTML=`<div class="t"><span class="dot ${c.on?"on":""}" style="${col?`background:${col};border-color:${col}`:""}"></span>${esc(c.name)}<small>${c.on?"Encendida":"Apagada"}</small></div><div class="sc"></div>`;

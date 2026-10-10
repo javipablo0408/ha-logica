@@ -1,5 +1,5 @@
 name: "Lógica"
-version: "0.9.0"
+version: "0.9.1"
 slug: loxone_logic
 description: "Bloques de lógica para Home Assistant con editor visual y app por habitaciones"
 url: "https://github.com/"

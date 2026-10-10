@@ -7,7 +7,7 @@
    "category": "Home Assistant",
    "complejidad": "simple",
    "url": "",
-   "descripcion": "Una luz de Home Assistant (on/off, regulable o RGB) con escenas. La entidad se elige dentro del bloque.",
+   "descripcion": "Una luz de Home Assistant (Zigbee, Z-Wave, ESPHome…): on/off, brillo, color, blanco por temperatura y escenas. Se adapta a lo que admite la luz.",
    "inputs": [
     {
      "abbr": "Tg",
@@ -38,6 +38,18 @@
      "name": "Brillo",
      "desc": "0-100 %",
      "range": "0-100"
+    },
+    {
+     "abbr": "Col",
+     "name": "Color",
+     "desc": "Color #rrggbb",
+     "range": "texto"
+    },
+    {
+     "abbr": "Temp",
+     "name": "Temperatura",
+     "desc": "0 cálido … 100 frío",
+     "range": "0-100"
     }
    ],
    "outputs": [
@@ -58,10 +70,22 @@
      "name": "Brillo",
      "desc": "",
      "range": "0-100"
+    },
+    {
+     "abbr": "Ct",
+     "name": "Blanco por temperatura",
+     "desc": "",
+     "range": "0/1"
+    },
+    {
+     "abbr": "K",
+     "name": "Temperatura",
+     "desc": "",
+     "range": "0-100"
     }
    ],
    "parameters": [],
-   "notas": "config: {entity, mode: rgb|dim|onoff, scenes:[{id,name,rgb:[0-100,0-100,0-100],br}]}"
+   "notas": "config: {entity, scenes:[{id,name,rgb:[0-100,0-100,0-100] | temp:0-100, br}]}"
   },
   {
    "id": "ha-remote",

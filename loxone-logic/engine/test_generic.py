@@ -166,4 +166,34 @@ def test_ha_light_app_card_by_area():
     m = b.api_app()
     assert [(r["name"], r["floor"]) for r in m["rooms"]] == [("Salón", "Planta baja"), ("Dormitorio", "Planta alta")]
     c = m["rooms"][1]["controls"][0]; assert c["type"] == "ha-light" and c["name"] == "Ida luz" and c["scenes"][0]["name"] == "Cálido"
-    assert m["rooms"][0]["controls"][0]["name"] == "Aplique" and m["rooms"][0]["controls"][0]["mode"] == "dim"
+    assert m["rooms"][0]["controls"][0]["name"] == "Aplique" and m["rooms"][0]["controls"][0]["caps"]["bri"]
+
+
+def test_rgb_for_adapts_to_light_capabilities():
+    from ha_bridge import rgb_for, light_caps
+    ct = {"supported_color_modes": ["color_temp"], "min_color_temp_kelvin": 2200, "max_color_temp_kelvin": 6500}
+    rgb = {"supported_color_modes": ["xy", "color_temp"], "min_color_temp_kelvin": 2000, "max_color_temp_kelvin": 6500}
+    dim = {"supported_color_modes": ["brightness"]}; onoff = {"supported_color_modes": ["onoff"]}
+    v = {"r": 255, "g": 100, "b": 0, "br": 40, "ct": 0, "k": 0}
+    assert rgb_for("light.x", v, rgb)[2] == {"entity_id": "light.x", "rgb_color": [255, 100, 0], "brightness_pct": 40}
+    assert rgb_for("light.x", v, ct)[2] == {"entity_id": "light.x", "brightness_pct": 40}        # sin color: solo brillo
+    assert rgb_for("light.x", v, dim)[2] == {"entity_id": "light.x", "brightness_pct": 40}
+    assert rgb_for("light.x", v, onoff)[2] == {"entity_id": "light.x"}
+    w = {**v, "ct": 1, "k": 100}
+    assert rgb_for("light.x", w, ct)[2]["color_temp_kelvin"] == 6500 and rgb_for("light.x", {**w, "k": 0}, rgb)[2]["color_temp_kelvin"] == 2000
+    assert "rgb_color" not in rgb_for("light.x", w, rgb)[2]
+    assert rgb_for("light.x", {**v, "br": 0}, rgb)[1] == "turn_off"
+    assert light_caps(onoff)["bri"] is False and light_caps(rgb)["color"] and light_caps(rgb)["temp"]
+
+def test_ha_light_color_temp_and_scene_white():
+    cfg = {"entity": "light.l", "scenes": [{"id": 1, "name": "Lectura", "temp": 20, "br": 70}, {"id": 2, "name": "Rojo", "rgb": [100, 0, 0]}]}
+    p = {"blocks": [{"id": "luz", "type": "ha-light", "config": cfg}], "wires": [], "consts": {}, "settings": {}, "periphery": []}
+    b = Bridge(p, "/tmp/_t13.json", dry=True)
+    b.block_cmd("luz", "Scene", 1); b.engine.cycle(1.0); o = b.engine.out["luz"]
+    assert (o["Ct"], o["K"], o["Br"], o["M"]) == (1, 20, 70, 1)
+    b.engine.cycle(1.0); b.block_cmd("luz", "Scene", 2); b.engine.cycle(1.0); o = b.engine.out["luz"]
+    assert o["Ct"] == 0 and (o["R"], o["G"]) == (100, 0)
+    b.engine.cycle(1.0); b.block_cmd("luz", "Col", "#00ff00"); b.engine.cycle(1.0); o = b.engine.out["luz"]
+    assert (o["R"], o["G"], o["B"], o["M"]) == (0, 100, 0, 0)
+    b.engine.cycle(1.0); b.block_cmd("luz", "Temp", 80); b.engine.cycle(1.0); o = b.engine.out["luz"]
+    assert (o["Ct"], o["K"], o["O"]) == (1, 80, 1)
