@@ -338,7 +338,7 @@ const RIB={
           ["Selección",[["▦","Seleccionar todo",selAll],["✕","Eliminar",delSel,"sel"],["⌕","Buscar (Ctrl+F)",openSearch]]],
           ["Alinear",[["⇤","Izquierda",()=>align("x"),"sel2"],["⇡","Arriba",()=>align("y"),"sel2"],["⇥","Derecha",()=>align("r"),"sel2"]]]],
  programacion:[["Insertar",[["▣","Bloque de función (Ctrl+B)",()=>openPicker("bloque")],["▤","Comentario",addNote],["➕","Página nueva",newPage]]],
-               ["Periferia",[["⇥","Entrada de HA",()=>openPicker("in")],["⇤","Salida de HA",()=>openPicker("out")],["◐","Luz RGB completa",()=>openPicker("rgb")]]],["Entradas virtuales",[["⏻","Interruptor",()=>addVirt("switch")],["●","Pulsador",()=>addVirt("button")],["▭","Deslizador",()=>addVirt("slider")],["🎨","Selector de color",()=>addVirt("color")]]],
+               ["Periferia",[["⇥","Entrada de HA",()=>openPicker("in")],["⇤","Salida de HA",()=>openPicker("out")],["◐","Luz RGB completa",()=>openPicker("rgb")]]],["Dispositivos de HA",[["💡","Luz",()=>openPicker("dev-light")],["🎛","Mando",()=>openPicker("dev-remote")]]],["Entradas virtuales",[["⏻","Interruptor",()=>addVirt("switch")],["●","Pulsador",()=>addVirt("button")],["▭","Deslizador",()=>addVirt("slider")],["🎨","Selector de color",()=>addVirt("color")]]],
                ["Página",[["✎","Renombrar",()=>renamePage(cur)],["🗑","Eliminar página",()=>delPage(cur),"pages"]]]],
  monitor:[["Home Assistant",[["▶","Modo activo / simulación",toggleMode,"mode"],["⟳","Recargar entidades",refreshEnt]]],
           ["Monitor",[["◉","Valores en el lienzo",()=>{monitorOn=!monitorOn;lsSet("mon",monitorOn?"1":"0");refreshRibbon();updateLive()},"mon"],["≣","Registro",()=>{bottomTab="log";setBottomMin(false);drawBottom()}]]]]
@@ -384,7 +384,7 @@ function fullRender(){world.querySelectorAll(".ob").forEach(n=>n.remove());
 function place(e,o){e.style.left=o.x+"px";e.style.top=o.y+"px";e.dataset.id=o.id;if(sel.has(o.id))e.classList.add("sel")}
 function nodeEl(n){
   const c=CAT[n.type]||{name:n.type,category:"",inputs:[],outputs:[]},e=el("div","ob blk"+(CAT[n.type]?.impl==="stub"?" stubb":""));place(e,n);
-  const title=n.name||c.name, sub=n.name?c.name:"";
+  const title=n.name||c.name, sub=n.name?c.name:(n.config?.entity?(ENT.find(x=>x.id===n.config.entity)?.name||n.config.entity):"");
   e.innerHTML=`<div class="h" style="--cc:${catColor(c.category)}"><b>${esc(title)}</b>${sub?`<small>${esc(sub)}</small>`:""}</div><div class="bd"><div class="col ins"></div><div class="col outs"></div></div>`;
   const ins=e.querySelector(".ins"),outs=e.querySelector(".outs");
   insOf(n.type).forEach(({abbr,def})=>{
@@ -566,6 +566,11 @@ function addRgbKit(entity,at){const p=at&&at.x!==undefined?at:center(),en=ENT.fi
   const o={id:"ha"+(nextId++),dir:"out",rgb:true,name:nm,entity,attribute:"",adapt:{scale_out:[0,100,0,255]},service:"",x:p.x+340,y:p.y,page:cur};
   S.pn.push(col,br,o);[["r"],["g"],["b"]].forEach(([k])=>S.wires.push({f:col.id,fp:k,t:o.id,tp:k}));S.wires.push({f:br.id,fp:"v",t:o.id,tp:"br"});
   touch();fullRender();setSel([o.id]);toast("Luz RGB creada: guarda y despliega, y usa la pestaña Control");}
+function addDev(mode,e,at){const p=at&&at.x!==undefined?at:center(),light=mode==="dev-light";
+  const cfg=light?{entity:e.id,mode:"rgb",scenes:[{id:1,name:"Cálido",rgb:[100,68,30]},{id:2,name:"Blanco",rgb:[100,100,100]},{id:3,name:"Relax",rgb:[100,30,5]}]}:{entity:e.id};
+  const n={id:newId(light?"ha-light":"ha-remote"),type:light?"ha-light":"ha-remote",name:"",params:{},config:cfg,x:p.x,y:p.y,page:cur};
+  S.nodes.push(n);touch();fullRender();setSel([n.id]);
+  toast(light?"Luz creada: elige tipo y escenas en Propiedades. Aparece sola en su habitación de la app":"Mando creado: cablea 1 pulsación (P1) a Alternar de una Luz")}
 function addNote(at){const p=(at&&at.x!==undefined)?at:center(),t=prompt("Texto del comentario","");if(t===null)return;const n={id:"n"+(nextId++),text:t,x:p.x,y:p.y,page:cur};S.notes.push(n);touch();fullRender();setSel([n.id])}
 function delSel(){if(!sel.size)return;const ids=sel;S.nodes=S.nodes.filter(n=>!ids.has(n.id));S.pn=S.pn.filter(n=>!ids.has(n.id));S.notes=S.notes.filter(n=>!ids.has(n.id));
   S.wires=S.wires.filter(w=>!ids.has(w.f)&&!ids.has(w.t));Object.keys(S.consts).forEach(k=>{if(ids.has(k.split(".")[0]))delete S.consts[k]});sel=new Set();touch();fullRender()}
@@ -646,7 +651,7 @@ vw.addEventListener("drop",e=>{e.preventDefault();const t=e.dataTransfer.getData
 
 /* ---------- selector modal (insertar / buscar) ---------- */
 let pickMode="bloque",pickAt=null,pickCat="";
-function openPicker(mode,at){pickMode=mode;pickAt=at&&at.x!==undefined?at:null;pickCat="";$("#mt").textContent=mode==="bloque"?"Insertar bloque de función":mode==="in"?"Entrada de Home Assistant":mode==="out"?"Salida de Home Assistant":mode==="rgb"?"Luz RGB: elige la luz (se crea con su color y brillo)":"Buscar en el proyecto";
+function openPicker(mode,at){pickMode=mode;pickAt=at&&at.x!==undefined?at:null;pickCat="";$("#mt").textContent=mode==="bloque"?"Insertar bloque de función":mode==="in"?"Entrada de Home Assistant":mode==="out"?"Salida de Home Assistant":mode==="rgb"?"Luz RGB: elige la luz (se crea con su color y brillo)":mode==="dev-light"?"Luz: elige la luz de Home Assistant":mode==="dev-remote"?"Mando: elige el mando o pulsador":"Buscar en el proyecto";
   $("#modal").style.display="flex";$("#mq").value="";$("#mq").focus();drawPicker()}
 function openSearch(){openPicker("buscar")}
 function closeModal(){$("#modal").style.display="none"}
@@ -667,8 +672,8 @@ function drawPicker(){
         const d=el("div","it",`<span>${esc(r.t)}</span><small>${esc(r.s)} · ${esc(pg)}</small>`);d.onclick=()=>{closeModal();if(r.o.page!==cur){cur=r.o.page;fullRender()}setSel([r.o.id]);view.x=vw.clientWidth/2-r.o.x*view.k-80;view.y=vw.clientHeight/2-r.o.y*view.k-40;applyView();drawWires()};ml.appendChild(d)});
   }else{
     mc.innerHTML='<div class="it" style="cursor:default">Entidades</div>';
-    ENT.filter(e=>(pickMode==="in"||(pickMode==="rgb"?e.domain==="light":OUT_DOM.has(e.domain)))&&(!q||(e.id+e.name+e.area+(e.device||"")).toLowerCase().includes(q))).slice(0,300)
-     .forEach(e=>{const d=el("div","it",`<span>${esc(e.name)}</span><small>${esc(e.id)}${e.device?" · "+esc(e.device):e.area?" · "+esc(e.area):""}</small>`);d.onclick=()=>{closeModal();pickMode==="rgb"?addRgbKit(e.id,pickAt):addHA(pickMode,e.id,pickAt)};ml.appendChild(d)});
+    ENT.filter(e=>(pickMode==="in"||(pickMode==="dev-light"?e.domain==="light":pickMode==="dev-remote"?(e.domain==="event"||e.domain==="sensor"||e.domain==="binary_sensor"):pickMode==="rgb"?e.domain==="light":OUT_DOM.has(e.domain)))&&(!q||(e.id+e.name+e.area+(e.device||"")).toLowerCase().includes(q))).slice(0,300)
+     .forEach(e=>{const d=el("div","it",`<span>${esc(e.name)}</span><small>${esc(e.id)}${e.device?" · "+esc(e.device):e.area?" · "+esc(e.area):""}</small>`);d.onclick=()=>{closeModal();pickMode==="rgb"?addRgbKit(e.id,pickAt):pickMode==="dev-light"||pickMode==="dev-remote"?addDev(pickMode,e,pickAt):addHA(pickMode,e.id,pickAt)};ml.appendChild(d)});
   }
 }
 
@@ -691,6 +696,19 @@ function drawProps(){
   $("#pnm").onchange=e=>{n.name=e.target.value.trim();touch();fullRender()};
   $("#pid").onchange=e=>{const v=e.target.value.trim().replace(/[.\s]/g,"_");if(!v||obj(v)&&obj(v)!==n){e.target.value=n.id;return}
     const o=n.id;S.wires.forEach(w=>{if(w.f===o)w.f=v;if(w.t===o)w.t=v});Object.keys(S.consts).forEach(k=>{if(k.startsWith(o+".")){S.consts[v+k.slice(o.length)]=S.consts[k];delete S.consts[k]}});n.id=v;sel=new Set([v]);touch();fullRender()};
+  if(n.type==="ha-light"||n.type==="ha-remote"){const cf=n.config||(n.config={}),isL=n.type==="ha-light";
+    b.insertAdjacentHTML("beforeend",`<div class="ph">${isL?"Luz de Home Assistant":"Mando de Home Assistant"}</div>`+tbl([["Entidad",`<input id="dve" value="${esc(cf.entity||"")}" placeholder="${isL?"light.salon":"event.mando_action"}">`,"Se mueve sola a la habitación (área) de esta entidad en HA"],
+      ...(isL?[["Tipo de luz",`<select id="dvm"><option value="rgb" ${(cf.mode||"rgb")==="rgb"?"selected":""}>Color (RGB)</option><option value="dim" ${cf.mode==="dim"?"selected":""}>Regulable</option><option value="onoff" ${cf.mode==="onoff"?"selected":""}>Solo on/off</option></select>`]]:[])]));
+    entityPicker($("#dve"),en=>{cf.entity=en.id;touch();fullRender();drawProps()});$("#dve").onchange=ev=>{cf.entity=ev.target.value.trim();touch();fullRender()};
+    if(isL){$("#dvm").onchange=ev=>{cf.mode=ev.target.value;touch();drawProps()};
+      const h2=v=>"#"+v.map(x=>Math.round(Math.max(0,Math.min(100,x))*2.55).toString(16).padStart(2,"0")).join(""),f2=h=>[1,3,5].map(i=>Math.round(parseInt(h.slice(i,i+2),16)/2.55));
+      const sc=cf.scenes||(cf.scenes=[]),w=el("div");w.style.padding="4px 6px";
+      w.innerHTML=`<div class="ph" style="margin:6px -6px">Escenas</div>`;
+      sc.forEach((s,k)=>{s.id=k+1;const r=el("div");r.style.cssText="display:flex;gap:4px;margin:4px 0;align-items:center";
+        r.innerHTML=`<input value="${esc(s.name||"")}" style="flex:1;min-width:0" placeholder="Nombre"><input type="color" value="${h2(s.rgb||[100,100,100])}" style="width:34px;padding:0"><input value="${s.br??100}" title="Brillo %" style="width:44px"><button class="pbtn d" style="margin:0;padding:2px 8px">×</button>`;
+        const [nm,co,br,x]=r.children;nm.onchange=()=>{s.name=nm.value;touch()};co.onchange=()=>{s.rgb=f2(co.value);touch()};br.onchange=()=>{s.br=Math.max(1,Math.min(100,Number(br.value)||100));touch()};
+        x.onclick=()=>{sc.splice(k,1);touch();drawProps()};w.appendChild(r)});
+      const add=el("button","pbtn","+ Añadir escena");add.onclick=()=>{sc.push({id:sc.length+1,name:"Escena "+(sc.length+1),rgb:[100,100,100],br:100});touch();drawProps()};w.appendChild(add);b.appendChild(w)}}
   const unwired=insOf(n.type).filter(({abbr})=>!S.wires.some(w=>w.t===n.id&&w.tp===abbr));
   if(unwired.length){b.insertAdjacentHTML("beforeend",`<div class="ph">Entradas sin conectar</div>`+tbl(unwired.map(({abbr,def})=>[plabel(abbr,def),`<input data-c="${esc(abbr)}" value="${esc(S.consts[n.id+"."+abbr]??"")}" placeholder="—">`,ptip(abbr,def)])));
     b.querySelectorAll("input[data-c]").forEach(i=>i.onchange=()=>{const k=n.id+"."+i.dataset.c,t=i.value.trim();if(t==="")delete S.consts[k];else{const v=Number(t.replace(",","."));S.consts[k]=isNaN(v)?t:v}touch();fullRender()})}

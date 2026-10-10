@@ -14,6 +14,7 @@ h1{font-size:20px;margin:6px 0 10px;display:flex;align-items:center;gap:8px}
 #st.sim{color:#e0a82e}#st.off{color:var(--bad)}
 nav{display:flex;gap:8px;overflow-x:auto;padding:0 0 12px;scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
+nav .fl{flex:none;align-self:center;color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.06em;padding:0 2px 0 8px}
 nav button{flex:none;border:1px solid var(--ln);background:var(--card);color:var(--mut);padding:8px 16px;border-radius:20px;font:inherit;font-weight:600;cursor:pointer}
 nav button.on{background:var(--acc);border-color:var(--acc);color:#10230a}
 main{padding:4px 16px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;max-width:1100px;margin:0 auto}
@@ -48,6 +49,7 @@ let model=null,room=null,busy=0,sig="";
 try{room=localStorage.getItem("room")}catch(e){}
 const hex=rgb=>"#"+(rgb||[255,255,255]).map(v=>Math.max(0,Math.min(255,v|0)).toString(16).padStart(2,"0")).join("");
 const send=async(id,v)=>{busy=Date.now()+1500;try{await api("api/virtual","PUT",{id,value:v})}catch(e){alert(e.message)}};
+const cmd=async(block,port,value)=>{busy=Date.now()+1200;try{await api("api/block","PUT",{block,port,value})}catch(e){alert(e.message)}setTimeout(poll,500)};
 const scene=async(b,m)=>{busy=Date.now()+800;try{await api("api/scene","PUT",{block:b,mood:m})}catch(e){alert(e.message)}setTimeout(poll,400)};
 function ctl(c,d){
   if(c.type==="switch"){
@@ -66,7 +68,15 @@ function ctl(c,d){
 }
 function card(c){
   const d=document.createElement("div");d.className="c";
-  if(c.type==="lighting"){
+  if(c.type==="ha-light"){
+    const col=c.on&&c.rgb?hex(c.rgb):"";
+    d.innerHTML=`<div class="t"><span class="dot ${c.on?"on":""}" style="${col?`background:${col};border-color:${col}`:""}"></span>${esc(c.name)}<label class="sw" style="margin-left:auto"><input type="checkbox" ${c.on?"checked":""}><i></i></label></div>`;
+    d.querySelector("input").onchange=()=>cmd(c.id,"Tg",1);
+    if(c.scenes.length){const w=document.createElement("div");w.className="sc";
+      c.scenes.forEach(s=>{const b=document.createElement("button");b.textContent=s.name;if(c.on&&+c.scene===+s.id)b.className="on";b.onclick=()=>cmd(c.id,"Scene",s.id);w.appendChild(b)});d.appendChild(w)}
+    if(c.mode!=="onoff"){const w=document.createElement("div");w.innerHTML=`<div class="row"><span>Brillo</span><small>${Math.round(c.br)}%</small></div><input type="range" min="1" max="100" step="1" value="${Math.max(1,Math.round(c.br||100))}">`;
+      const i=w.querySelector("input"),s=w.querySelector("small");i.oninput=()=>s.textContent=i.value+"%";i.onchange=()=>cmd(c.id,"Br",Number(i.value));d.appendChild(w)}
+  }else if(c.type==="lighting"){
     const col=c.on&&c.rgb?hex(c.rgb):"";
     d.innerHTML=`<div class="t"><span class="dot ${c.on?"on":""}" style="${col?`background:${col};border-color:${col}`:""}"></span>${esc(c.name)}<small>${c.on?"Encendida":"Apagada"}</small></div><div class="sc"></div>`;
     const w=d.querySelector(".sc");
@@ -84,11 +94,13 @@ function card(c){
 function draw(){
   const rs=model.rooms,nav=$("#nav"),m=$("#m");
   if(!rs.find(r=>r.id===room))room=rs[0]?.id;
-  nav.innerHTML="";rs.forEach(r=>{const b=document.createElement("button");b.textContent=r.name;if(r.id===room)b.className="on";
+  nav.innerHTML="";const fl=new Set(rs.map(r=>r.floor).filter(Boolean));let lf=null;
+  rs.forEach(r=>{if(fl.size>1&&r.floor&&r.floor!==lf){lf=r.floor;const s=document.createElement("span");s.className="fl";s.textContent=lf;nav.appendChild(s)}
+    const b=document.createElement("button");b.textContent=r.name;if(r.id===room)b.className="on";
     b.onclick=()=>{room=r.id;try{localStorage.setItem("room",room)}catch(e){}sig="";draw()};nav.appendChild(b)});
   nav.style.display=rs.length>1?"flex":"none";
   m.innerHTML="";const r=rs.find(x=>x.id===room);
-  if(!r){m.innerHTML='<div class="empty">Aún no hay nada que mostrar.<br>Añade luces, escenas o controles virtuales en el editor y despliega.</div>';return}
+  if(!r){m.innerHTML='<div class="empty">Aún no hay nada que mostrar.<br>Añade bloques de Luz en el editor (Programación → Dispositivos de HA) y despliega.</div>';return}
   r.controls.forEach(c=>m.appendChild(card(c)));
 }
 async function poll(){

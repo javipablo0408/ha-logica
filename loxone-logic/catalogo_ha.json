@@ -1,0 +1,98 @@
+{
+ "version": "1.0",
+ "bloques": [
+  {
+   "id": "ha-light",
+   "name": "Luz",
+   "category": "Home Assistant",
+   "complejidad": "simple",
+   "url": "",
+   "descripcion": "Una luz de Home Assistant (on/off, regulable o RGB) con escenas. La entidad se elige dentro del bloque.",
+   "inputs": [
+    {
+     "abbr": "Tg",
+     "name": "Alternar",
+     "desc": "Pulso: enciende o apaga",
+     "range": "0/1"
+    },
+    {
+     "abbr": "On",
+     "name": "Encender",
+     "desc": "",
+     "range": "0/1"
+    },
+    {
+     "abbr": "Off",
+     "name": "Apagar",
+     "desc": "",
+     "range": "0/1"
+    },
+    {
+     "abbr": "Scene",
+     "name": "Escena",
+     "desc": "Número de escena (0 = apagar)",
+     "range": "0-99"
+    },
+    {
+     "abbr": "Br",
+     "name": "Brillo",
+     "desc": "0-100 %",
+     "range": "0-100"
+    }
+   ],
+   "outputs": [
+    {
+     "abbr": "O",
+     "name": "Encendida",
+     "desc": "",
+     "range": "0/1"
+    },
+    {
+     "abbr": "M",
+     "name": "Escena activa",
+     "desc": "",
+     "range": "0-99"
+    },
+    {
+     "abbr": "Br",
+     "name": "Brillo",
+     "desc": "",
+     "range": "0-100"
+    }
+   ],
+   "parameters": [],
+   "notas": "config: {entity, mode: rgb|dim|onoff, scenes:[{id,name,rgb:[0-100,0-100,0-100],br}]}"
+  },
+  {
+   "id": "ha-remote",
+   "name": "Mando",
+   "category": "Home Assistant",
+   "complejidad": "simple",
+   "url": "",
+   "descripcion": "Mando o pulsador de Home Assistant: un pulso por cada tipo de pulsación.",
+   "inputs": [],
+   "outputs": [
+    {
+     "abbr": "P1",
+     "name": "1 pulsación",
+     "desc": "",
+     "range": "0/1"
+    },
+    {
+     "abbr": "P2",
+     "name": "2 pulsaciones",
+     "desc": "",
+     "range": "0/1"
+    },
+    {
+     "abbr": "PL",
+     "name": "Pulsación larga",
+     "desc": "",
+     "range": "0/1"
+    }
+   ],
+   "parameters": [],
+   "notas": "config: {entity, events:{E1,E2,EL}}"
+  }
+ ]
+}

@@ -21,6 +21,8 @@ def catalog():
     if _CAT is None:
         p = os.path.join(os.path.dirname(__file__), "..", "catalogo_loxone.json")
         _CAT = {b["id"]: b for b in json.load(open(p))["bloques"]}
+        q = os.path.join(os.path.dirname(__file__), "..", "catalogo_ha.json")
+        if os.path.exists(q): _CAT.update({b["id"]: b for b in json.load(open(q))["bloques"]})
     return _CAT
 
 def catalog_defaults(bid):

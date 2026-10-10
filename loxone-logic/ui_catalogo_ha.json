@@ -1,0 +1,69 @@
+{
+ "ha-light": {
+  "name": "Luz",
+  "category": "Home Assistant",
+  "desc": "Una luz de Home Assistant (on/off, regulable o RGB) con escenas. La entidad se elige dentro del bloque.",
+  "hide": false,
+  "hide_reason": "",
+  "inputs": {
+   "Tg": {
+    "label": "Alternar",
+    "desc": "Pulso: enciende o apaga"
+   },
+   "On": {
+    "label": "Encender",
+    "desc": ""
+   },
+   "Off": {
+    "label": "Apagar",
+    "desc": ""
+   },
+   "Scene": {
+    "label": "Escena",
+    "desc": "Número de escena (0 = apagar)"
+   },
+   "Br": {
+    "label": "Brillo",
+    "desc": "0-100 %"
+   }
+  },
+  "outputs": {
+   "O": {
+    "label": "Encendida",
+    "desc": ""
+   },
+   "M": {
+    "label": "Escena activa",
+    "desc": ""
+   },
+   "Br": {
+    "label": "Brillo",
+    "desc": ""
+   }
+  },
+  "parameters": {}
+ },
+ "ha-remote": {
+  "name": "Mando",
+  "category": "Home Assistant",
+  "desc": "Mando o pulsador de Home Assistant: un pulso por cada tipo de pulsación.",
+  "hide": false,
+  "hide_reason": "",
+  "inputs": {},
+  "outputs": {
+   "P1": {
+    "label": "1 pulsación",
+    "desc": ""
+   },
+   "P2": {
+    "label": "2 pulsaciones",
+    "desc": ""
+   },
+   "PL": {
+    "label": "Pulsación larga",
+    "desc": ""
+   }
+  },
+  "parameters": {}
+ }
+}

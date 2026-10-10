@@ -11,7 +11,8 @@ import websockets
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import runtime
-for m in ("b_basic", "b_seq", "b_comfort", "b_energy", "b_audio", "b_climate", "b_stubs"): __import__(m)
+for m in ("b_basic", "b_seq", "b_comfort", "b_energy", "b_audio", "b_climate", "b_stubs", "b_ha"): __import__(m)
+from b_ha import expand as _expand
 from runtime import Engine, Ctx
 
 CYCLE = 1.0
@@ -72,6 +73,8 @@ def _ui():
     if _UI is None:
         p = os.path.join(HERE, "..", "ui_catalogo.json")
         _UI = json.load(open(p)) if os.path.exists(p) else {}
+        q = os.path.join(HERE, "..", "ui_catalogo_ha.json")
+        if os.path.exists(q): _UI.update(json.load(open(q)))
     return _UI
 
 def _clean(project):
@@ -83,7 +86,7 @@ class Bridge:
         self.lock = threading.RLock()
         self.states = {}; self.mid = 0; self.connected = False
         self.calls = collections.deque(maxlen=200); self.err = None
-        self.ws = None; self.loop_ = None; self.ha_cfg = {}; self.ent_area = {}; self.ent_dev = {}
+        self.ws = None; self.loop_ = None; self.ha_cfg = {}; self.ent_area = {}; self.ent_dev = {}; self.area_meta = {}; self.ent_devid = {}
         self.load(project)
     # ---------- proyecto
     def load(self, project, snap=None):
@@ -95,7 +98,8 @@ class Bridge:
             ctx.now = dt.datetime.now(); ctx.events = []
             old = getattr(self, "engine", None)
             if snap is None and old is not None: snap = old.snapshot()
-            eng = Engine(project, ctx)
+            ep = {**project, "periphery": list(project.get("periphery", [])) + _expand(project)}
+            eng = Engine(ep, ctx)
             if snap:
                 same = {x["id"] for x in project["blocks"] if old is not None and old.project_types.get(x["id"]) == x["type"]}
                 try: eng.restore({k: v for k, v in snap.items() if k in same})
@@ -105,9 +109,9 @@ class Bridge:
             self.last_out = {}; self.first = True
             self.in_map = {}
             self.virt = {v["id"]: v for v in project.get("virtuals", [])}
-            for p in project.get("periphery", []):
+            for p in ep["periphery"]:
                 if p["dir"] == "in" and not p.get("vid"): self.in_map.setdefault(p["entity"], []).append(p)
-            self.out_map = {p["name"]: p for p in project.get("periphery", []) if p["dir"] == "out"}
+            self.out_map = {p["name"]: p for p in ep["periphery"] if p["dir"] == "out"}
             for e in self.in_map: self.push_inputs(e, True)
             for p in project.get("periphery", []):
                 if p.get("vid") and p["dir"] == "in": self._push_virtual(p, True)
@@ -137,7 +141,7 @@ class Bridge:
             if v.get("kind") != "button":
                 tmp = self.path + ".tmp"; json.dump(self.project, open(tmp, "w"), ensure_ascii=False, indent=1); os.replace(tmp, self.path)
     def save(self, project):
-        Engine(project, Ctx())                       # valida (lanza si hay tipo desconocido, etc.)
+        Engine({**project, "periphery": list(project.get("periphery", [])) + _expand(project)}, Ctx())   # valida (lanza si hay tipo desconocido, etc.)
         with self.lock:
             if os.path.exists(self.path): os.replace(self.path, self.path + ".bak")
             tmp = self.path + ".tmp"; json.dump(project, open(tmp, "w"), ensure_ascii=False, indent=1); os.replace(tmp, self.path)
@@ -205,9 +209,9 @@ class Bridge:
             await ws.send(json.dumps({"type": "auth", "access_token": token}))
             r = json.loads(await ws.recv())
             if r["type"] != "auth_ok": raise SystemExit(f"Auth fallida: {r}")
-            aid, eid, did, gid, cid, sid = (self.nid() for _ in range(6))   # HA exige ids crecientes en el orden de envío
+            aid, eid, did, fid, gid, cid, sid = (self.nid() for _ in range(7))   # HA exige ids crecientes en el orden de envío
             reg = {}
-            for i_, t_ in ((aid, "area"), (eid, "entity"), (did, "device")):
+            for i_, t_ in ((aid, "area"), (eid, "entity"), (did, "device"), (fid, "floor")):
                 await ws.send(json.dumps({"id": i_, "type": f"config/{t_}_registry/list"}))
             await ws.send(json.dumps({"id": gid, "type": "get_states"}))
             await ws.send(json.dumps({"id": cid, "type": "get_config"}))
@@ -221,17 +225,24 @@ class Bridge:
                         with self.lock:
                             for k, v in self.ha_cfg.items():
                                 if v is not None and k not in self.project.get("settings", {}): setattr(self.ctx, k, v)
-                    elif m.get("id") in (aid, eid, did) and m.get("type") == "result":
+                    elif m.get("id") in (aid, eid, did, fid) and m.get("type") == "result":
                         if not m.get("success"): print("registro no disponible (sin áreas):", m.get("error"), flush=True)
                         reg[m["id"]] = (m.get("result") or []) if m.get("success") else []
-                        if len(reg) == 3:
+                        if len(reg) == 4:
                             areas = {a["area_id"]: a["name"] for a in reg[aid]}
+                            fl = {f["floor_id"]: (f.get("name", ""), f.get("level") if f.get("level") is not None else 0) for f in reg[fid]}
+                            meta = {}
+                            for a in reg[aid]:
+                                fn, lv = fl.get(a.get("floor_id"), ("", 0))
+                                meta[a["name"]] = {"floor": fn, "level": lv}
+                            self.area_meta = meta
                             dev = {d["id"]: d.get("area_id") for d in reg[did]}
                             with self.lock:
                                 self.ent_area = {e["entity_id"]: areas.get(e.get("area_id") or dev.get(e.get("device_id")), "")
                                                  for e in reg[eid]}
                                 dn = {d["id"]: d.get("name_by_user") or d.get("name") or "" for d in reg[did]}
                                 self.ent_dev = {e["entity_id"]: dn.get(e.get("device_id"), "") for e in reg[eid] if e.get("device_id")}
+                                self.ent_devid = {e["entity_id"]: e["device_id"] for e in reg[eid] if e.get("device_id")}
                     elif m.get("id") == gid and m.get("type") == "result":
                         if not m.get("success"): raise OSError(f"get_states falló: {m.get('error')}")
                         with self.lock:
@@ -260,21 +271,37 @@ class Bridge:
                     "in": {p["name"]: state_value(self.states.get(p.get("entity")), p.get("attribute"))
                            for p in self.project.get("periphery", []) if p["dir"] == "in" and not p.get("vid")}}
     def api_app(self):
-        """Modelo de la interfaz: una sala por página y UNA tarjeta por bloque (como Loxone).
-        Lo que va cableado a un controlador de iluminación (brillo, color, luz de salida) vive dentro de su tarjeta."""
+        """Interfaz de usuario: plantas > habitaciones (áreas de HA) > un dispositivo = una tarjeta, todo ordenado solo.
+        Los bloques de dispositivo (ha-light…) van a la habitación del área de su entidad en HA; lo antiguo (controles
+        virtuales, controlador de iluminación) va a la habitación que se llame como su página del editor."""
         with self.lock:
             pr = self.project; nodes = pr.get("ha_nodes") or []; byid = {n["id"]: n for n in nodes}
-            pages = pr.get("pages") or [{"id": "p1", "name": "Inicio"}]
-            rooms = {p["id"]: {"id": p["id"], "name": p["name"], "controls": []} for p in pages}
-            first = pages[0]["id"]; room = lambda pg: rooms.get(pg) or rooms[first]
-            ui = pr.get("ui") or {}; wires = pr.get("ha_wires") or []
+            rooms = {}
+            def room(name, pg=None):
+                name = (name or "").strip() or "Sin área"; k = name.lower()
+                if k not in rooms:
+                    m = self.area_meta.get(name) or next((v for a, v in self.area_meta.items() if a.lower() == k), {})
+                    rooms[k] = {"id": k, "name": name, "floor": m.get("floor", ""), "level": m.get("level", 0), "controls": []}
+                return rooms[k]
+            pages = {p["id"]: p["name"] for p in (pr.get("pages") or [])}
+            first = next(iter(pages.values()), "Inicio"); ui = pr.get("ui") or {}; wires = pr.get("ha_wires") or []
+            pname = lambda pg: pages.get(pg) or first
             def virt(n):
                 v = self.virt.get(n["id"]) or {}
                 return {"id": n["id"], "type": n["virt"], "name": n.get("name") or n["virt"], "value": v.get("value", n.get("value")),
                         "min": n.get("min", 0), "max": n.get("max", 100), "step": n.get("step", 1)}
-            def light(n):
-                st = self.states.get(n["entity"]) or {}; at = st.get("attributes") or {}
-                return {"state": st.get("state"), "rgb": at.get("rgb_color") if n.get("rgb") else None}
+            def ent(e):
+                st = self.states.get(e) or {}; return st.get("state"), (st.get("attributes") or {})
+            for bl in pr.get("blocks", []):
+                cfg = bl.get("config") or {}; bid = bl["id"]; out = self.engine.out.get(bid) or {}
+                if bl.get("app") is False: continue
+                if bl["type"] == "ha-light" and cfg.get("entity"):
+                    e = cfg["entity"]; stt, at = ent(e)
+                    room(self.ent_area.get(e))["controls"].append({"id": bid, "type": "ha-light", "cat": 0,
+                        "name": bl.get("name") or at.get("friendly_name") or self.ent_dev.get(e) or e, "entity": e,
+                        "mode": cfg.get("mode", "rgb"), "on": bool(out.get("O")), "scene": out.get("M", 0), "br": out.get("Br") or 0,
+                        "rgb": at.get("rgb_color") if stt == "on" else None,
+                        "scenes": [{"id": int(s["id"]), "name": s.get("name") or f"Escena {s['id']}"} for s in cfg.get("scenes", [])]})
             used = set()
             for bl in pr.get("blocks", []):
                 if bl["type"] != "lighting-controller" or bl.get("app") is False: continue
@@ -283,21 +310,29 @@ class Bridge:
                 ins = [byid[w["f"]] for w in wires if w.get("t") == bid and w["f"] in byid and byid[w["f"]].get("virt")]
                 outs = [byid[w["t"]] for w in wires if w.get("f") == bid and w["t"] in byid and byid[w["t"]].get("entity")]
                 used.update(n["id"] for n in ins + outs)
-                lights = [light(n) for n in outs]; seen = set()
-                ins = [n for n in ins if not (n["id"] in seen or seen.add(n["id"]))]
-                on = any(l["state"] == "on" for l in lights)
-                room((ui.get(bid) or {}).get("page"))["controls"].append({"id": bid, "type": "lighting",
-                    "name": bl.get("name") or "Iluminación", "value": (self.engine.out.get(bid) or {}).get("M", 0), "on": on,
-                    "rgb": next((l["rgb"] for l in lights if l["rgb"] and l["state"] == "on"), None),
-                    "scenes": [{"id": k, "name": names.get(str(k), f"Escena {k}")} for k in ids],
-                    "controls": [virt(n) for n in ins if n.get("app") is not False]})
+                lights = [(ent(n["entity"])[0], ent(n["entity"])[1].get("rgb_color") if n.get("rgb") else None) for n in outs]
+                seen = set(); ins = [n for n in ins if not (n["id"] in seen or seen.add(n["id"]))]
+                room(self.ent_area.get(outs[0]["entity"]) if outs and self.ent_area.get(outs[0]["entity"]) else pname((ui.get(bid) or {}).get("page")))["controls"].append(
+                    {"id": bid, "type": "lighting", "cat": 0, "name": bl.get("name") or "Iluminación", "value": (self.engine.out.get(bid) or {}).get("M", 0),
+                     "on": any(l[0] == "on" for l in lights), "rgb": next((l[1] for l in lights if l[1] and l[0] == "on"), None),
+                     "scenes": [{"id": k, "name": names.get(str(k), f"Escena {k}")} for k in ids],
+                     "controls": [virt(n) for n in ins if n.get("app") is not False]})
             for n in nodes:
                 if n.get("app") is False or n["id"] in used: continue
-                if n.get("virt"): room(n.get("page"))["controls"].append(virt(n))
+                if n.get("virt"): room(pname(n.get("page")))["controls"].append({**virt(n), "cat": 5})
                 elif n.get("dir") == "out" and n.get("entity"):
-                    l = light(n); room(n.get("page"))["controls"].append({"id": n["id"], "type": "light" if n.get("rgb") else "status",
-                        "name": n.get("name") or n["entity"], "entity": n["entity"], **l})
-            return {"dry": self.dry, "connected": self.connected, "rooms": [r for r in rooms.values() if r["controls"]]}
+                    stt, at = ent(n["entity"])
+                    room(self.ent_area.get(n["entity"]) or pname(n.get("page")))["controls"].append({"id": n["id"], "type": "light" if n.get("rgb") else "status",
+                        "cat": 1, "name": n.get("name") or n["entity"], "entity": n["entity"], "state": stt,
+                        "rgb": at.get("rgb_color") if n.get("rgb") else None})
+            rs = sorted((r for r in rooms.values() if r["controls"]), key=lambda r: (r["level"], r["floor"].lower(), r["name"].lower()))
+            for r in rs: r["controls"].sort(key=lambda c: (c.get("cat", 9), str(c.get("name")).lower()))
+            return {"dry": self.dry, "connected": self.connected, "rooms": rs}
+    def block_cmd(self, block, port, value):
+        if port not in ("Tg", "On", "Off", "Scene", "Br"): raise ValueError(f"orden no permitida: {port}")
+        with self.lock:
+            if (self.engine.project_types or {}).get(block) != "ha-light": raise KeyError(f"no es un bloque de luz: {block}")
+            self.engine.inject(block, port, value)
     def scene(self, block, mood):
         with self.lock: self.engine.inject(block, "Mood", int(mood))
     def api_entities(self):
@@ -346,6 +381,8 @@ def make_handler(br):
                     d = json.loads(body)
                     if not br.dry: raise ValueError("La prueba de entradas solo está disponible en SIMULACIÓN")
                     br.simulate(d["entity"], d.get("value")); return self._send(200, {"ok": True})
+                if self.path == "/api/block":
+                    d = json.loads(body); br.block_cmd(d["block"], d["port"], d.get("value", 1)); return self._send(200, {"ok": True})
                 if self.path == "/api/scene":
                     d = json.loads(body); br.scene(d["block"], d["mood"]); return self._send(200, {"ok": True})
                 if self.path == "/api/virtual":

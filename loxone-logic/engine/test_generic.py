@@ -146,3 +146,37 @@ def test_app_model_and_scene():
     assert b.engine.out["lc1"]["M"] == 1
     b.scene("lc1", 0); b.engine.cycle(1.0)
     assert b.engine.out["lc1"]["M"] == 0
+
+def test_ha_light_block_scenes_toggle_and_sync():
+    import ha_bridge as hb
+    cfg = {"entity": "light.ida_luz", "mode": "rgb", "scenes": [{"id": 1, "name": "Cálido", "rgb": [100, 68, 30]}, {"id": 2, "name": "Blanco", "rgb": [100, 100, 100], "br": 60}]}
+    p = {"blocks": [{"id": "luz", "type": "ha-light", "config": cfg}, {"id": "mando", "type": "ha-remote", "config": {"entity": "event.estanteria_action"}}],
+         "wires": [["mando.P1", "luz.Tg"], ["mando.P2", "luz.Off"]], "consts": {}, "settings": {}, "periphery": []}
+    b = Bridge(p, "/tmp/_t11.json", dry=True)
+    b.states["light.ida_luz"] = {"state": "off", "attributes": {"friendly_name": "Ida luz"}}
+    b.load(p); b.engine.cycle(1.0)
+    assert b.engine.out["luz"]["O"] == 0
+    b.simulate("event.estanteria_action", "single"); b.engine.cycle(1.0)
+    o = b.engine.out["luz"]; assert o["O"] == 1 and o["M"] == 1 and (o["R"], o["G"], o["B"]) == (100, 68, 30)
+    b.engine.cycle(1.0); b.block_cmd("luz", "Scene", 2); b.engine.cycle(1.0)
+    o = b.engine.out["luz"]; assert o["M"] == 2 and o["Br"] == 60
+    b.block_cmd("luz", "Br", 30); b.engine.cycle(1.0); assert b.engine.out["luz"]["Br"] == 30 and b.engine.out["luz"]["M"] == 0
+    b.simulate("event.estanteria_action", "double"); b.engine.cycle(1.0); b.engine.cycle(1.0)
+    assert b.engine.out["luz"]["O"] == 0 and b.engine.out["luz"]["Br"] == 0
+    # HA cambia la luz por fuera (otra app): el bloque la sigue, pasado el eco de las órdenes propias
+    b.engine.cycle(3.0); b.states["light.ida_luz"] = {"state": "on", "attributes": {}}; b.push_inputs("light.ida_luz"); b.engine.cycle(1.0)
+    assert b.engine.out["luz"]["O"] == 1
+    try: b.block_cmd("luz", "Hack", 1); assert False
+    except ValueError: pass
+
+def test_ha_light_app_card_by_area():
+    cfg = {"entity": "light.ida_luz", "scenes": [{"id": 1, "name": "Cálido", "rgb": [100, 68, 30]}]}
+    p = {"blocks": [{"id": "luz", "type": "ha-light", "config": cfg}, {"id": "luz2", "type": "ha-light", "name": "Aplique", "config": {"entity": "light.sala", "mode": "dim"}}],
+         "wires": [], "consts": {}, "settings": {}, "periphery": []}
+    b = Bridge(p, "/tmp/_t12.json", dry=True)
+    b.ent_area = {"light.ida_luz": "Dormitorio", "light.sala": "Salón"}; b.area_meta = {"Dormitorio": {"floor": "Planta alta", "level": 1}, "Salón": {"floor": "Planta baja", "level": 0}}
+    b.states["light.ida_luz"] = {"state": "on", "attributes": {"friendly_name": "Ida luz", "rgb_color": [255, 0, 0]}}
+    m = b.api_app()
+    assert [(r["name"], r["floor"]) for r in m["rooms"]] == [("Salón", "Planta baja"), ("Dormitorio", "Planta alta")]
+    c = m["rooms"][1]["controls"][0]; assert c["type"] == "ha-light" and c["name"] == "Ida luz" and c["scenes"][0]["name"] == "Cálido"
+    assert m["rooms"][0]["controls"][0]["name"] == "Aplique" and m["rooms"][0]["controls"][0]["mode"] == "dim"
