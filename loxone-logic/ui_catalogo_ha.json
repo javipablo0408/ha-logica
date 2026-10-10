@@ -1,8 +1,8 @@
 {
  "ha-light": {
-  "name": "Luz",
+  "name": "Controlador de luz",
   "category": "Home Assistant",
-  "desc": "Una luz de Home Assistant (Zigbee, Z-Wave, ESPHome…): on/off, brillo, color, blanco por temperatura y escenas. Se adapta a lo que admite la luz.",
+  "desc": "Coordina una o varias luces de Home Assistant: on/off, brillo, color, blanco por temperatura y escenas. Conecta su salida «Luz» a los nodos de luz; se adapta a lo que admite cada una.",
   "hide": false,
   "hide_reason": "",
   "inputs": {
@@ -36,6 +36,10 @@
    }
   },
   "outputs": {
+   "L": {
+    "label": "Luz",
+    "desc": "Cablea aquí cada luz que controla"
+   },
    "O": {
     "label": "Encendida",
     "desc": ""
@@ -54,29 +58,6 @@
    },
    "K": {
     "label": "Temperatura",
-    "desc": ""
-   }
-  },
-  "parameters": {}
- },
- "ha-remote": {
-  "name": "Mando",
-  "category": "Home Assistant",
-  "desc": "Mando o pulsador de Home Assistant: un pulso por cada tipo de pulsación.",
-  "hide": false,
-  "hide_reason": "",
-  "inputs": {},
-  "outputs": {
-   "P1": {
-    "label": "1 pulsación",
-    "desc": ""
-   },
-   "P2": {
-    "label": "2 pulsaciones",
-    "desc": ""
-   },
-   "PL": {
-    "label": "Pulsación larga",
     "desc": ""
    }
   },

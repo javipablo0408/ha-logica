@@ -3,11 +3,11 @@
  "bloques": [
   {
    "id": "ha-light",
-   "name": "Luz",
+   "name": "Controlador de luz",
    "category": "Home Assistant",
    "complejidad": "simple",
    "url": "",
-   "descripcion": "Una luz de Home Assistant (Zigbee, Z-Wave, ESPHome…): on/off, brillo, color, blanco por temperatura y escenas. Se adapta a lo que admite la luz.",
+   "descripcion": "Coordina una o varias luces de Home Assistant: on/off, brillo, color, blanco por temperatura y escenas. Conecta su salida «Luz» a los nodos de luz; se adapta a lo que admite cada una.",
    "inputs": [
     {
      "abbr": "Tg",
@@ -54,6 +54,12 @@
    ],
    "outputs": [
     {
+     "abbr": "L",
+     "name": "Luz",
+     "desc": "Cablea aquí cada luz que controla",
+     "range": "-"
+    },
+    {
      "abbr": "O",
      "name": "Encendida",
      "desc": "",
@@ -85,38 +91,7 @@
     }
    ],
    "parameters": [],
-   "notas": "config: {entity, scenes:[{id,name,rgb:[0-100,0-100,0-100] | temp:0-100, br}]}"
-  },
-  {
-   "id": "ha-remote",
-   "name": "Mando",
-   "category": "Home Assistant",
-   "complejidad": "simple",
-   "url": "",
-   "descripcion": "Mando o pulsador de Home Assistant: un pulso por cada tipo de pulsación.",
-   "inputs": [],
-   "outputs": [
-    {
-     "abbr": "P1",
-     "name": "1 pulsación",
-     "desc": "",
-     "range": "0/1"
-    },
-    {
-     "abbr": "P2",
-     "name": "2 pulsaciones",
-     "desc": "",
-     "range": "0/1"
-    },
-    {
-     "abbr": "PL",
-     "name": "Pulsación larga",
-     "desc": "",
-     "range": "0/1"
-    }
-   ],
-   "parameters": [],
-   "notas": "config: {entity, events:{E1,E2,EL}}"
+   "notas": "config: {scenes:[{id,name,rgb:[0-100,0-100,0-100] | temp:0-100, br}]}"
   }
  ]
 }

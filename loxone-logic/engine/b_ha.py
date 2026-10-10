@@ -82,28 +82,33 @@ class Scaler(Block):
         if p["V2"] == p["V1"]: return {"Sv": p["Sv1"]}
         return {"Sv": p["Sv1"] + (v - p["V1"]) * (p["Sv2"] - p["Sv1"]) / (p["V2"] - p["V1"])}
 
-@block("ha-remote")
-class HaRemote(Block):
-    """Mando / pulsador de HA (entidad event.* o sensor.*_action). Da un pulso por cada tipo de pulsación."""
-    def step(self, i, dt):
-        return {"P1": int(g(i, "E1") > 0), "P2": int(g(i, "E2") > 0), "PL": int(g(i, "EL") > 0)}
+REMOTE_EVENTS = {
+    "P1": "single,short_press,press,on_press,toggle,1_short_release,button_1_press,button_1_press_release",
+    "P2": "double,double_press,2_double_press,button_1_double_press",
+    "PL": "hold,long_press,long,1_long_press,button_1_hold,button_1_long_press",
+}
 
 def expand(project):
-    """Periferia que generan los bloques de dispositivo (se añade a la del proyecto, no se guarda)."""
-    per = []
-    for b in project.get("blocks", []):
-        c = b.get("config") or {}; e = c.get("entity"); bid = b["id"]
-        if not e: continue
-        if b["type"] == "ha-light":
-            per.append({"name": f"{bid}·estado", "dir": "in", "target": f"{bid}.S", "entity": e, "adapt": {"equals": "on"}})
+    """Periferia que sale de los cables a nodos de dispositivo de HA (no se guarda; se calcula al cargar):
+    - bloque Luz (salida «Luz») -> nodo de luz: una orden light.* con color/brillo/temperatura, adaptada a la luz;
+      el estado real de la primera luz vuelve al bloque (entrada S) para seguirla si se cambia desde fuera.
+    - nodo Mando (P1/P2/PL) -> entrada de bloque: un pulso por tipo de pulsación."""
+    nodes = {n["id"]: n for n in project.get("ha_nodes") or []}; blocks = {b["id"]: b for b in project.get("blocks", [])}
+    per = []; fed = set()
+    for w in project.get("ha_wires") or []:
+        f, t = w.get("f"), w.get("t")
+        if f in blocks and blocks[f]["type"] == "ha-light" and w.get("fp") == "L" and nodes.get(t, {}).get("light") and nodes[t].get("entity"):
+            e = nodes[t]["entity"]
+            if f not in fed:
+                fed.add(f); per.append({"name": f"{f}·estado", "dir": "in", "target": f"{f}.S", "entity": e, "adapt": {"equals": "on"}})
             for role, port in (("r", "R"), ("g", "G"), ("b", "B"), ("br", "Br"), ("ct", "Ct"), ("k", "K")):
-                q = {"name": f"{bid}·{role}", "dir": "out", "target": f"{bid}.{port}", "entity": e, "group": bid, "role": role}
-                if role in "rgb": q["adapt"] = {"scale_out": [0, 100, 0, 255]}
+                q = {"name": f"{t}·{role}", "dir": "out", "target": f"{f}.{port}", "entity": e, "group": t, "role": role}
+                if role in ("r", "g", "b"): q["adapt"] = {"scale_out": [0, 100, 0, 255]}
                 per.append(q)
-        elif b["type"] == "ha-remote":
-            ev = {**EV_DEFAULT, **(c.get("events") or {})}
-            for port in ("E1", "E2", "EL"):
-                q = {"name": f"{bid}·{port}", "dir": "in", "target": f"{bid}.{port}", "entity": e, "adapt": {"pulse": True, "equals": ev[port]}}
-                if c.get("attribute"): q["attribute"] = c["attribute"]
-                per.append(q)
+        elif nodes.get(f, {}).get("remote") and nodes[f].get("entity") and t in blocks:
+            ev = {**REMOTE_EVENTS, **(nodes[f].get("events") or {})}.get(w.get("fp"))
+            if ev is None: continue
+            q = {"name": f"{f}.{w['fp']}→{t}.{w['tp']}", "dir": "in", "target": f"{t}.{w['tp']}", "entity": nodes[f]["entity"], "adapt": {"pulse": True, "equals": ev}}
+            if nodes[f].get("attribute"): q["attribute"] = nodes[f]["attribute"]
+            per.append(q)
     return per

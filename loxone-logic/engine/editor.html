@@ -308,6 +308,8 @@ function toProject(){
     const fp=pnById(w.f),tp=pnById(w.t);
     if(fp&&fp.virt&&isB(w.t)){addHw(w);const q={name:uniq(fp.virt==="color"?(fp.name||"Color")+"."+w.fp:fp.name||VK[fp.virt]),dir:"in",target:`${w.t}.${w.tp}`,vid:fp.id,role:w.fp};
       if(fp.virt==="button")q.adapt={pulse:true};per.push(q)}
+    else if(tp&&tp.light&&isB(w.f)){addHw(w)}            // el puente genera la orden a la luz (ver expand en b_ha.py)
+    else if(fp&&fp.remote&&isB(w.t)){addHw(w)}           // idem para los pulsos del mando
     else if(fp&&isB(w.t)){addHw(w);const q={name:fp.name||fp.entity,dir:"in",target:`${w.t}.${w.tp}`,entity:fp.entity};
       if(fp.attribute)q.attribute=fp.attribute;if(Object.keys(fp.adapt||{}).length)q.adapt=fp.adapt;per.push(q)}
     else if(tp&&tp.rgb&&isB(w.f)){addHw(w);const q={name:uniq((tp.name||tp.entity)+"."+w.tp),dir:"out",target:`${w.f}.${w.fp}`,entity:tp.entity,group:tp.id,role:w.tp};
@@ -338,7 +340,7 @@ const RIB={
           ["Selección",[["▦","Seleccionar todo",selAll],["✕","Eliminar",delSel,"sel"],["⌕","Buscar (Ctrl+F)",openSearch]]],
           ["Alinear",[["⇤","Izquierda",()=>align("x"),"sel2"],["⇡","Arriba",()=>align("y"),"sel2"],["⇥","Derecha",()=>align("r"),"sel2"]]]],
  programacion:[["Insertar",[["▣","Bloque de función (Ctrl+B)",()=>openPicker("bloque")],["▤","Comentario",addNote],["➕","Página nueva",newPage]]],
-               ["Periferia",[["⇥","Entrada de HA",()=>openPicker("in")],["⇤","Salida de HA",()=>openPicker("out")],["◐","Luz RGB completa",()=>openPicker("rgb")]]],["Dispositivos de HA",[["💡","Luz",()=>openPicker("dev-light")],["🎛","Mando",()=>openPicker("dev-remote")]]],["Entradas virtuales",[["⏻","Interruptor",()=>addVirt("switch")],["●","Pulsador",()=>addVirt("button")],["▭","Deslizador",()=>addVirt("slider")],["🎨","Selector de color",()=>addVirt("color")]]],
+               ["Periferia",[["⇥","Entrada de HA",()=>openPicker("in")],["⇤","Salida de HA",()=>openPicker("out")]]],["Dispositivos de HA",[["🧠","Controlador de luz",()=>addBlock("ha-light")],["💡","Luz",()=>openPicker("dev-light")],["🎛","Mando",()=>openPicker("dev-remote")]]],["Entradas virtuales",[["⏻","Interruptor",()=>addVirt("switch")],["●","Pulsador",()=>addVirt("button")],["▭","Deslizador",()=>addVirt("slider")],["🎨","Selector de color",()=>addVirt("color")]]],
                ["Página",[["✎","Renombrar",()=>renamePage(cur)],["🗑","Eliminar página",()=>delPage(cur),"pages"]]]],
  monitor:[["Home Assistant",[["▶","Modo activo / simulación",toggleMode,"mode"],["⟳","Recargar entidades",refreshEnt]]],
           ["Monitor",[["◉","Valores en el lienzo",()=>{monitorOn=!monitorOn;lsSet("mon",monitorOn?"1":"0");refreshRibbon();updateLive()},"mon"],["≣","Registro",()=>{bottomTab="log";setBottomMin(false);drawBottom()}]]]]
@@ -405,6 +407,13 @@ function pnEl(p){
   if(p.virt==="color"){const w=el("div","ob pnwrap in rgbn vout");place(w,p);
     w.innerHTML=`<div class="hd"><span>${esc(p.name||"Color")}</span><small>selector de color</small></div>`;
     [["r","Rojo"],["g","Verde"],["b","Azul"]].forEach(([k,l])=>{const r=el("div","rw",esc(l));const pin=el("span","pin"+(S.wires.some(x=>x.f===p.id&&x.fp===k)?" cn":""));pin.dataset.node=p.id;pin.dataset.port=k;pin.dataset.dir="o";r.appendChild(pin);w.appendChild(r)});
+    return w}
+  if(p.light){const w=el("div","ob pnwrap out rgbn");place(w,p);
+    w.innerHTML=`<div class="hd"><span title="${esc(p.entity)}">${esc(p.name||p.entity||"(sin entidad)")}</span><small>luz</small></div>`;
+    const r=el("div","rw","Luz"),pin=el("span","pin"+(S.wires.some(x=>x.t===p.id)?" cn":""));pin.dataset.node=p.id;pin.dataset.port="L";pin.dataset.dir="i";r.appendChild(pin);w.appendChild(r);return w}
+  if(p.remote){const w=el("div","ob pnwrap in rgbn vout");place(w,p);
+    w.innerHTML=`<div class="hd"><span title="${esc(p.entity)}">${esc(p.name||p.entity||"(sin entidad)")}</span><small>mando</small></div>`;
+    [["P1","1 pulsación"],["P2","2 pulsaciones"],["PL","Pulsación larga"]].forEach(([k,l])=>{const r=el("div","rw",esc(l));const pin=el("span","pin"+(S.wires.some(x=>x.f===p.id&&x.fp===k)?" cn":""));pin.dataset.node=p.id;pin.dataset.port=k;pin.dataset.dir="o";r.appendChild(pin);w.appendChild(r)});
     return w}
   if(p.rgb){const w=el("div","ob pnwrap out rgbn");place(w,p);
     w.innerHTML=`<div class="hd"><span title="${esc(p.entity)}">${esc(p.name||p.entity||"(sin entidad)")}</span><small>luz RGB</small></div>`;
@@ -555,7 +564,7 @@ function center(){const r=vw.getBoundingClientRect();let x=snap((r.width/2-view.
   const boxes=[...world.querySelectorAll(".ob")].map(e=>({x:e.offsetLeft,y:e.offsetTop,w:e.offsetWidth,h:e.offsetHeight}));
   const hit=(a,b)=>a.x<b.x+b.w+12&&a.x+170>b.x&&a.y<b.y+b.h+12&&a.y+110>b.y;
   for(let i=0;i<80&&boxes.some(b=>hit({x,y},b));i++){x+=G*3;if(i%8==7){x-=G*24;y+=G*5}}return {x,y}}
-function addBlock(type,at){const p=at||center(),n={id:newId(type),type,name:"",params:{},config:null,x:p.x,y:p.y,page:cur};S.nodes.push(n);touch();fullRender();setSel([n.id])}
+function addBlock(type,at){const p=at||center(),n={id:newId(type),type,name:"",params:{},config:type==="ha-light"?{scenes:[{id:1,name:"Cálido",rgb:[100,68,30],br:100},{id:2,name:"Blanco",rgb:[100,100,100],br:100},{id:3,name:"Relax",rgb:[100,30,5],br:60}]}:null,x:p.x,y:p.y,page:cur};S.nodes.push(n);touch();fullRender();setSel([n.id])}
 function addHA(dir,entity,at,rgb){const p=at||center(),e=ENT.find(x=>x.id===entity);
   const n={id:"ha"+(nextId++),dir,name:e?.name||entity||"",entity:entity||"",attribute:"",adapt:dir==="in"?{fallback:0}:{},service:"",x:p.x,y:p.y,page:cur};
   if(rgb){n.rgb=true;n.adapt={scale_out:[0,100,0,255]}}S.pn.push(n);touch();fullRender();setSel([n.id])}
@@ -566,11 +575,11 @@ function addRgbKit(entity,at){const p=at&&at.x!==undefined?at:center(),en=ENT.fi
   const o={id:"ha"+(nextId++),dir:"out",rgb:true,name:nm,entity,attribute:"",adapt:{scale_out:[0,100,0,255]},service:"",x:p.x+340,y:p.y,page:cur};
   S.pn.push(col,br,o);[["r"],["g"],["b"]].forEach(([k])=>S.wires.push({f:col.id,fp:k,t:o.id,tp:k}));S.wires.push({f:br.id,fp:"v",t:o.id,tp:"br"});
   touch();fullRender();setSel([o.id]);toast("Luz RGB creada: guarda y despliega, y usa la pestaña Control");}
-function addDev(mode,e,at){const p=at&&at.x!==undefined?at:center(),light=mode==="dev-light";
-  const cfg=light?{entity:e.id,scenes:[{id:1,name:"Cálido",rgb:[100,68,30]},{id:2,name:"Blanco",rgb:[100,100,100]},{id:3,name:"Relax",rgb:[100,30,5]}]}:{entity:e.id};
-  const n={id:newId(light?"ha-light":"ha-remote"),type:light?"ha-light":"ha-remote",name:"",params:{},config:cfg,x:p.x,y:p.y,page:cur};
-  S.nodes.push(n);touch();fullRender();setSel([n.id]);
-  toast(light?"Luz creada: ajusta las escenas en Propiedades. Aparece sola en su habitación de la app":"Mando creado: cablea 1 pulsación (P1) a Alternar de una Luz")}
+function addDev(mode,en,at){const p=at&&at.x!==undefined?at:center(),light=mode==="dev-light";
+  const n={id:"ha"+(nextId++),dir:light?"out":"in",entity:en.id,name:en.name||en.id,attribute:"",adapt:{},x:p.x,y:p.y,page:cur};
+  if(light)n.light=true;else n.remote=true;
+  S.pn.push(n);touch();fullRender();setSel([n.id]);
+  toast(light?"Luz añadida: cablea la salida «Luz» de un Controlador de luz a este nodo":"Mando añadido: cablea sus pulsaciones a las entradas de un Controlador de luz")}
 function addNote(at){const p=(at&&at.x!==undefined)?at:center(),t=prompt("Texto del comentario","");if(t===null)return;const n={id:"n"+(nextId++),text:t,x:p.x,y:p.y,page:cur};S.notes.push(n);touch();fullRender();setSel([n.id])}
 function delSel(){if(!sel.size)return;const ids=sel;S.nodes=S.nodes.filter(n=>!ids.has(n.id));S.pn=S.pn.filter(n=>!ids.has(n.id));S.notes=S.notes.filter(n=>!ids.has(n.id));
   S.wires=S.wires.filter(w=>!ids.has(w.f)&&!ids.has(w.t));Object.keys(S.consts).forEach(k=>{if(ids.has(k.split(".")[0]))delete S.consts[k]});sel=new Set();touch();fullRender()}
@@ -699,12 +708,8 @@ function drawProps(){
   $("#pnm").onchange=e=>{n.name=e.target.value.trim();touch();fullRender()};
   $("#pid").onchange=e=>{const v=e.target.value.trim().replace(/[.\s]/g,"_");if(!v||obj(v)&&obj(v)!==n){e.target.value=n.id;return}
     const o=n.id;S.wires.forEach(w=>{if(w.f===o)w.f=v;if(w.t===o)w.t=v});Object.keys(S.consts).forEach(k=>{if(k.startsWith(o+".")){S.consts[v+k.slice(o.length)]=S.consts[k];delete S.consts[k]}});n.id=v;sel=new Set([v]);touch();fullRender()};
-  if(n.type==="ha-light"||n.type==="ha-remote"){const cf=n.config||(n.config={}),isL=n.type==="ha-light";
-    b.insertAdjacentHTML("beforeend",`<div class="ph">${isL?"Luz de Home Assistant":"Mando de Home Assistant"}</div>`+tbl([["Entidad",`<input id="dve" value="${esc(cf.entity||"")}" placeholder="${isL?"light.salon":"event.mando_action"}">`,"Se mueve sola a la habitación (área) de esta entidad en HA"],
-      ]));
-    entityPicker($("#dve"),en=>{cf.entity=en.id;touch();fullRender();drawProps()});$("#dve").onchange=ev=>{cf.entity=ev.target.value.trim();touch();fullRender()};
-    if(isL){
-      const h2=v=>"#"+v.map(x=>Math.round(Math.max(0,Math.min(100,x))*2.55).toString(16).padStart(2,"0")).join(""),f2=h=>[1,3,5].map(i=>Math.round(parseInt(h.slice(i,i+2),16)/2.55));
+  if(n.type==="ha-light"){const cf=n.config||(n.config={}),isL=true;
+    {      const h2=v=>"#"+v.map(x=>Math.round(Math.max(0,Math.min(100,x))*2.55).toString(16).padStart(2,"0")).join(""),f2=h=>[1,3,5].map(i=>Math.round(parseInt(h.slice(i,i+2),16)/2.55));
       const sc=cf.scenes||(cf.scenes=[]),w=el("div");w.style.padding="4px 6px";
       w.innerHTML=`<div class="ph" style="margin:6px -6px">Escenas</div>`;
       sc.forEach((s,k)=>{s.id=k+1;const white=s.temp!=null,r=el("div");r.style.cssText="display:flex;gap:4px;margin:4px 0;align-items:center";
@@ -783,6 +788,12 @@ function profIdx(p,isIn,P){
   return P.findIndex(([,v])=>isIn?((p.attribute||"")===(v.attribute||"")&&sj(p.adapt||{})===sj(v.adapt||{}))
     :((p.service||"")===(v.service||"")&&sj(p.service_data||null)===sj(v.service_data||null)&&(p.service_when||"")===(v.service_when||"")&&sj(p.adapt||{})===sj(v.adapt||{})))}
 function haProps(b,p){
+  if(p.light||p.remote){const L=!!p.light;
+    b.innerHTML=`<div class="ph">${L?"Luz de Home Assistant":"Mando de Home Assistant"}</div>`+tbl([["Entidad",`<input id="pe" value="${esc(p.entity)}" placeholder="${L?"light.salon":"event.mando_action"}">`],["Nombre",`<input id="pnm" value="${esc(p.name)}">`]])+
+     `<div class="help">${L?"Es la lámpara real. Cablea aquí la salida «Luz» de un Controlador de luz: él decide encendido, color, brillo y temperatura, adaptado a lo que admita esta luz. Puedes cablear varias luces al mismo controlador. La habitación sale del área que tenga en Home Assistant.":"Es el mando real (entidad event.* o sensor.*_action). Cablea sus pulsaciones a las entradas de un Controlador de luz."}</div>`;
+    entityPicker($("#pe"),en=>{p.entity=en.id;if(!p.name||p.name===p.entity)p.name=en.name;touch();fullRender();drawProps()});
+    $("#pe").onchange=ev=>{p.entity=ev.target.value.trim();touch();fullRender()};$("#pnm").onchange=ev=>{p.name=ev.target.value;touch();fullRender()};
+    const d=el("button","pbtn d","Eliminar");d.onclick=delSel;b.appendChild(d);return}
   if(p.virt){const k=p.virt;
     b.innerHTML=`<div class="ph">Entrada virtual · ${esc(VK[k])}</div>`+tbl([["Nombre",`<input id="pnm" value="${esc(p.name)}">`],
       ...(k==="slider"?[["Mínimo",`<input id="pmin" value="${p.min??0}">`],["Máximo",`<input id="pmax" value="${p.max??100}">`],["Paso",`<input id="pstp" value="${p.step??1}">`]]:[])])+
