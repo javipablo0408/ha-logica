@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Puente Home Assistant <-> motor Loxone-like + servidor del editor visual.
+"""Puente Home Assistant <-> motor de bloques + servidor del editor visual y de la app.
 Uso:  python3 ha_bridge.py proyecto.json [--live] [--port 8099]
  - Sin --live arranca en SIMULACIÓN (imprime/loguea las llamadas pero no toca HA). Se activa desde el editor.
  - HA_URL (ws://IP:8123/api/websocket) y HA_TOKEN (token de larga duración). En add-on: SUPERVISOR_TOKEN.
@@ -11,7 +11,7 @@ import websockets
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import runtime
-for m in ("b_basic", "b_seq", "b_comfort", "b_energy", "b_audio", "b_climate", "b_stubs", "b_ha"): __import__(m)
+__import__("b_ha")
 from b_ha import expand as _expand
 from runtime import Engine, Ctx
 
@@ -71,10 +71,8 @@ _UI = None
 def _ui():
     global _UI
     if _UI is None:
-        p = os.path.join(HERE, "..", "ui_catalogo.json")
-        _UI = json.load(open(p)) if os.path.exists(p) else {}
         q = os.path.join(HERE, "..", "ui_catalogo_ha.json")
-        if os.path.exists(q): _UI.update(json.load(open(q)))
+        _UI = json.load(open(q)) if os.path.exists(q) else {}
     return _UI
 
 def _clean(project):
@@ -303,20 +301,6 @@ class Bridge:
                         "rgb": at.get("rgb_color") if stt == "on" else None,
                         "scenes": [{"id": int(s["id"]), "name": s.get("name") or f"Escena {s['id']}"} for s in cfg.get("scenes", [])]})
             used = set()
-            for bl in pr.get("blocks", []):
-                if bl["type"] != "lighting-controller" or bl.get("app") is False: continue
-                cfg = bl.get("config") or {}; names = cfg.get("names", {}); bid = bl["id"]
-                ids = sorted(int(k) for k in cfg.get("moods", {}) if int(k) not in (98, 99))
-                ins = [byid[w["f"]] for w in wires if w.get("t") == bid and w["f"] in byid and byid[w["f"]].get("virt")]
-                outs = [byid[w["t"]] for w in wires if w.get("f") == bid and w["t"] in byid and byid[w["t"]].get("entity")]
-                used.update(n["id"] for n in ins + outs)
-                lights = [(ent(n["entity"])[0], ent(n["entity"])[1].get("rgb_color") if n.get("rgb") else None) for n in outs]
-                seen = set(); ins = [n for n in ins if not (n["id"] in seen or seen.add(n["id"]))]
-                room(self.ent_area.get(outs[0]["entity"]) if outs and self.ent_area.get(outs[0]["entity"]) else pname((ui.get(bid) or {}).get("page")))["controls"].append(
-                    {"id": bid, "type": "lighting", "cat": 0, "name": bl.get("name") or "Iluminación", "value": (self.engine.out.get(bid) or {}).get("M", 0),
-                     "on": any(l[0] == "on" for l in lights), "rgb": next((l[1] for l in lights if l[1] and l[0] == "on"), None),
-                     "scenes": [{"id": k, "name": names.get(str(k), f"Escena {k}")} for k in ids],
-                     "controls": [virt(n) for n in ins if n.get("app") is not False]})
             for n in nodes:
                 if n.get("app") is False or n["id"] in used: continue
                 if n.get("virt"): room(pname(n.get("page")))["controls"].append({**virt(n), "cat": 5})
@@ -402,7 +386,12 @@ def main():
     port = int(sys.argv[sys.argv.index("--port") + 1]) if "--port" in sys.argv else 8099
     if "--port" in sys.argv: args = [a for a in args if a != str(port)]
     path = os.path.abspath(args[0]); project = json.load(open(path))
-    b = Bridge(project, path, dry="--live" not in sys.argv)
+    try: b = Bridge(project, path, dry="--live" not in sys.argv)
+    except KeyError as e:                       # proyecto con bloques que ya no existen: se aparta y se empieza vacío
+        os.replace(path, path + ".incompatible.json")
+        print(f"Proyecto incompatible ({e}); guardado como {path}.incompatible.json. Empiezo vacío.", flush=True)
+        project = {"settings": {}, "pages": [{"id": "p1", "name": "Página 1"}], "blocks": [], "wires": [], "consts": {}, "periphery": []}
+        json.dump(project, open(path, "w")); b = Bridge(project, path, dry="--live" not in sys.argv)
     if os.path.exists(path + ".state.json"):
         try: b.engine.restore(json.load(open(path + ".state.json")))
         except Exception as e: print("snapshot ignorado:", e)

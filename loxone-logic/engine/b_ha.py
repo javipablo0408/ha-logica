@@ -56,6 +56,14 @@ class HaLight(Block):
         r, gg, bb = self.rgb
         return {"O": self.on, "M": self.scene, "R": r, "G": gg, "B": bb, "Br": self.br if self.on else 0}
 
+@block("scaler")
+class Scaler(Block):
+    """Interno (no sale en el catálogo): lo usa el editor para unir directamente dos nodos de HA."""
+    def step(self, i, dt):
+        p = self.p; v = g(i, "V")
+        if p["V2"] == p["V1"]: return {"Sv": p["Sv1"]}
+        return {"Sv": p["Sv1"] + (v - p["V1"]) * (p["Sv2"] - p["Sv1"]) / (p["V2"] - p["V1"])}
+
 @block("ha-remote")
 class HaRemote(Block):
     """Mando / pulsador de HA (entidad event.* o sensor.*_action). Da un pulso por cada tipo de pulsación."""

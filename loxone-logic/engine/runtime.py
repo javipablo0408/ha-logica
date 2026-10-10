@@ -19,10 +19,8 @@ _CAT = None
 def catalog():
     global _CAT
     if _CAT is None:
-        p = os.path.join(os.path.dirname(__file__), "..", "catalogo_loxone.json")
-        _CAT = {b["id"]: b for b in json.load(open(p))["bloques"]}
-        q = os.path.join(os.path.dirname(__file__), "..", "catalogo_ha.json")
-        if os.path.exists(q): _CAT.update({b["id"]: b for b in json.load(open(q))["bloques"]})
+        p = os.path.join(os.path.dirname(__file__), "..", "catalogo_ha.json")
+        _CAT = {b["id"]: b for b in json.load(open(p))["bloques"]} if os.path.exists(p) else {}
     return _CAT
 
 def catalog_defaults(bid):
@@ -114,7 +112,8 @@ class Engine:
         self.project = project; self.ctx = ctx or Ctx()
         self.blocks = {}
         for b in project["blocks"]:
-            cls = REGISTRY[b["type"]]
+            cls = REGISTRY.get(b["type"])
+            if cls is None: raise KeyError(f"tipo de bloque desconocido: {b['type']}")
             self.blocks[b["id"]] = cls(b["type"], b.get("params"), b.get("config"), self.ctx)
             self.blocks[b["id"]].iid = b["id"]
         self.wires = [(tuple(a.split(".", 1)), tuple(c.split(".", 1))) for a, c in project.get("wires", [])]

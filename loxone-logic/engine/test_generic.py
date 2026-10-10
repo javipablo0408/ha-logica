@@ -5,8 +5,8 @@ import ha_bridge as hb
 from ha_bridge import service_for, _tpl, Bridge
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-UI = json.load(open(os.path.join(HERE, "..", "ui_catalogo.json"), encoding="utf-8"))
-CAT = json.load(open(os.path.join(HERE, "..", "catalogo_loxone.json"), encoding="utf-8"))
+UI = json.load(open(os.path.join(HERE, "..", "ui_catalogo_ha.json"), encoding="utf-8"))
+CAT = json.load(open(os.path.join(HERE, "..", "catalogo_ha.json"), encoding="utf-8"))
 
 def test_tpl():
     assert _tpl({"a": "{v}", "b": "x{v}"}, 5) == {"a": 5, "b": "x5"}
@@ -18,29 +18,29 @@ def test_service_explicit_and_default():
     assert service_for("scene.s", 0) is None
 
 def proj(per, blocks=None, wires=None):
-    return {"blocks": blocks or [{"id": "b", "type": "push-notification", "config": {"service": "notify.mobile_app_x", "title": "T", "message": "val <v1>"}}],
+    return {"blocks": blocks or [{"id": "b", "type": "scaler", "params": {"V1": 0, "Sv1": 0, "V2": 1, "Sv2": 1}}],
             "wires": wires or [], "consts": {}, "periphery": per, "settings": {}}
 
 def test_pulse_equals_then_resets():
-    p = proj([{"name": "btn", "dir": "in", "target": "b.Tr", "entity": "sensor.btn", "adapt": {"pulse": True, "equals": "single,press"}}])
+    p = proj([{"name": "btn", "dir": "in", "target": "b.V", "entity": "sensor.btn", "adapt": {"pulse": True, "equals": "single,press"}}])
     b = Bridge(p, "/tmp/_t.json")
     b.states["sensor.btn"] = {"state": "single"}; b.push_inputs("sensor.btn")
-    b.engine.cycle(1.0)
-    ev = [e for e in b.ctx.events if e.get("kind") == "notify"]
-    assert ev, "el pulso debe disparar el aviso"
-    c = b.notify_call(ev[0])
-    assert c[0:2] == ("notify", "mobile_app_x") and c[2]["title"] == "T" and "message" in c[2]
-    b.ctx.events.clear(); b.engine.cycle(1.0)
-    assert not [e for e in b.ctx.events if e.get("kind") == "notify"], "sin nuevo pulso no hay aviso"
+    b.engine.cycle(1.0); assert b.engine.out["b"]["Sv"] == 1
+    b.engine.cycle(1.0); assert b.engine.out["b"]["Sv"] == 0, "el pulso dura un ciclo"
 
-def test_ui_catalog_covers_all_and_no_loxone_leftovers():
+def test_ui_catalog_covers_all_blocks():
+    import runtime
     ids = {b["id"] for b in CAT["bloques"]}
-    assert ids <= set(UI), ids - set(UI)
-    bad = re.compile(r"\bLoxone\b|Miniserver|\bT[1-5]\b|Tree|Air\b", re.I)
-    for k, u in UI.items():
-        if u.get("hide"): continue
-        for txt in [u["name"], u["category"]] + [v.get("label", "") for sec in ("inputs", "outputs", "params") for v in u.get(sec, {}).values() if not v.get("hide")]:
-            assert not bad.search(txt or ""), (k, txt)
+    assert ids == set(UI) and ids <= set(runtime.REGISTRY), (ids ^ set(UI), ids - set(runtime.REGISTRY))
+    for b in CAT["bloques"]:
+        for sec in ("inputs", "outputs"):
+            assert {p["abbr"] for p in b[sec]} <= set(UI[b["id"]][sec]), (b["id"], sec)
+
+def test_incompatible_project_is_set_aside(tmp_path):
+    import subprocess
+    p = tmp_path / "p.json"; p.write_text(json.dumps({"blocks": [{"id": "x", "type": "switch"}], "wires": [], "consts": {}, "periphery": []}))
+    try: Bridge(json.load(open(p)), str(p), dry=True); assert False
+    except KeyError as e: assert "switch" in str(e)
 
 def test_rgb_group_single_call():
     import asyncio
@@ -121,14 +121,9 @@ def test_pulse_ignores_attribute_only_updates():
     b.push_inputs("sensor.x"); b.engine.cycle(1.0)
     assert b.engine.out["_pt0"]["Sv"] == 1
 
-def test_app_model_and_scene():
-    import json
-    d = json.load(open(os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "ida-luz-lighting.json"))) if False else None
-    p = {"blocks": [{"id": "lc1", "type": "lighting-controller", "name": "Luces", "config": {"moods": {"1": {"Lc1": 100}, "2": {"Lc1": 50}}, "names": {"1": "Cálido"}}}],
-         "wires": [], "consts": {}, "settings": {}, "pages": [{"id": "p1", "name": "Salón"}, {"id": "p2", "name": "Vacía"}],
-         "ui": {"lc1": {"x": 0, "y": 0, "page": "p1"}}, "periphery": [],
+def test_app_model_virtuals_and_status():
+    p = {"blocks": [], "wires": [], "consts": {}, "settings": {}, "periphery": [], "pages": [{"id": "p1", "name": "Salón"}],
          "virtuals": [{"id": "ha1", "name": "Brillo", "kind": "slider", "value": 40}],
-         "ha_wires": [{"f": "ha1", "fp": "v", "t": "lc1", "tp": "MBr"}, {"f": "lc1", "fp": "Lc1", "t": "ha2", "tp": "r"}],
          "ha_nodes": [{"id": "ha1", "dir": "in", "virt": "slider", "name": "Brillo", "min": 0, "max": 100, "step": 1, "page": "p1", "value": 40},
                       {"id": "ha2", "dir": "out", "rgb": True, "name": "Lámpara", "entity": "light.l", "page": "p1"},
                       {"id": "ha3", "dir": "out", "name": "Oculta", "entity": "light.o", "page": "p1", "app": False}]}
@@ -137,15 +132,7 @@ def test_app_model_and_scene():
     m = b.api_app()
     assert [r["name"] for r in m["rooms"]] == ["Salón"]
     cs = {c["type"]: c for c in m["rooms"][0]["controls"]}
-    assert set(cs) == {"lighting"}, cs.keys()          # UNA tarjeta por bloque: brillo y luz van dentro
-    L = cs["lighting"]; assert L["on"] and L["rgb"] == [255, 0, 0] and L["controls"][0]["value"] == 40
-    assert [s["name"] for s in L["scenes"]] == ["Cálido", "Escena 2"]
-    b.scene("lc1", 2); b.engine.cycle(1.0)
-    assert b.engine.out["lc1"]["M"] == 2 and b.api_app()["rooms"][0]["controls"][-1]["value"] == 2
-    b.scene("lc1", 2); b.engine.cycle(1.0); b.scene("lc1", 1); b.engine.cycle(1.0)
-    assert b.engine.out["lc1"]["M"] == 1
-    b.scene("lc1", 0); b.engine.cycle(1.0)
-    assert b.engine.out["lc1"]["M"] == 0
+    assert set(cs) == {"slider", "light"} and cs["slider"]["value"] == 40 and cs["light"]["rgb"] == [255, 0, 0]
 
 def test_ha_light_block_scenes_toggle_and_sync():
     import ha_bridge as hb

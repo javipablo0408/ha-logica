@@ -421,7 +421,7 @@ function pinPos(id,port,dir){
   const a=d.getBoundingClientRect(),w=vw.getBoundingClientRect();
   return {x:(a.left+a.width/2-w.left-view.x)/view.k,y:(a.top+a.height/2-w.top-view.y)/view.k};
 }
-function route(a,b){ // cables ortogonales como en Loxone Config
+function route(a,b){ // cables ortogonales
   const r=5;let pts;
   if(b.x>a.x+24){const mx=snap((a.x+b.x)/2)+(((a.x+b.x)/2)%G?0:0);pts=[a,{x:mx,y:a.y},{x:mx,y:b.y},b]}
   else{const ya=(a.y+b.y)/2+(Math.abs(a.y-b.y)<14?40:0);pts=[a,{x:a.x+16,y:a.y},{x:a.x+16,y:ya},{x:b.x-16,y:ya},{x:b.x-16,y:b.y},b]}

@@ -1,7 +1,7 @@
-name: "Lógica (Loxone-like)"
-version: "0.8.1"
+name: "Lógica"
+version: "0.9.0"
 slug: loxone_logic
-description: "Motor de bloques de función estilo Loxone Config con editor visual para Home Assistant"
+description: "Bloques de lógica para Home Assistant con editor visual y app por habitaciones"
 url: "https://github.com/"
 arch: [amd64, aarch64]
 startup: application

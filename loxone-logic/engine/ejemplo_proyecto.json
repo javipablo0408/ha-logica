@@ -1,6 +1,18 @@
 {
-  "blocks": [],
-  "wires": [],
-  "consts": {},
-  "periphery": []
+ "settings": {},
+ "pages": [
+  {
+   "id": "p1",
+   "name": "P\u00e1gina 1"
+  }
+ ],
+ "blocks": [],
+ "wires": [],
+ "consts": {},
+ "periphery": [],
+ "virtuals": [],
+ "ui": {},
+ "ha_nodes": [],
+ "ha_wires": [],
+ "notes": []
 }
