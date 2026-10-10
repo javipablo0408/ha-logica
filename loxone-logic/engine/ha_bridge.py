@@ -306,24 +306,25 @@ class Bridge:
                         "min": n.get("min", 0), "max": n.get("max", 100), "step": n.get("step", 1)}
             def ent(e):
                 st = self.states.get(e) or {}; return st.get("state"), (st.get("attributes") or {})
+            used = set()
             for bl in pr.get("blocks", []):
                 cfg = bl.get("config") or {}; bid = bl["id"]; out = self.engine.out.get(bid) or {}
                 if bl.get("app") is False: continue
                 if bl["type"] == "ha-light":
                     ents = [byid[w["t"]]["entity"] for w in (pr.get("ha_wires") or []) if w.get("f") == bid and w.get("fp") == "L"
                             and w.get("t") in byid and byid[w["t"]].get("light") and byid[w["t"]].get("entity")]
+                    used.update(w["t"] for w in (pr.get("ha_wires") or []) if w.get("f") == bid and w.get("fp") == "L")
                     if not ents: continue
                     sts = [ent(e) for e in ents]; caps = [light_caps(a) for _, a in sts]; caps = [c for c in caps if c]
                     cp = {"color": any(c["color"] for c in caps), "temp": any(c["temp"] for c in caps), "bri": any(c["bri"] for c in caps) if caps else True,
                           "tmin": min((c["tmin"] for c in caps), default=2000), "tmax": max((c["tmax"] for c in caps), default=6500)}
-                    first = ents[0]; at0 = sts[0][1]
-                    room(self.ent_area.get(first))["controls"].append({"id": bid, "type": "ha-light", "cat": 0, "lights": len(ents),
-                        "name": bl.get("name") or (at0.get("friendly_name") if len(ents) == 1 else None) or self.ent_area.get(first) or first,
+                    ent0 = ents[0]; at0 = sts[0][1]
+                    room(self.ent_area.get(ent0) or pname((ui.get(bid) or {}).get("page")))["controls"].append({"id": bid, "type": "ha-light", "cat": 0, "lights": len(ents),
+                        "name": bl.get("name") or (at0.get("friendly_name") if len(ents) == 1 else None) or self.ent_area.get(ent0) or ent0,
                         "caps": cp, "on": bool(out.get("O")), "scene": out.get("M", 0), "br": out.get("Br") or 0,
                         "k": out.get("K", 50), "ct": bool(out.get("Ct")),
                         "rgb": next((a.get("rgb_color") for s, a in sts if s == "on" and a.get("rgb_color")), None),
                         "scenes": [{"id": int(s["id"]), "name": s.get("name") or f"Escena {s['id']}"} for s in cfg.get("scenes", [])]})
-            used = set()
             for n in nodes:
                 if n.get("app") is False or n["id"] in used: continue
                 if n.get("virt"): room(pname(n.get("page")))["controls"].append({**virt(n), "cat": 5})

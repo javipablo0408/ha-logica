@@ -219,3 +219,11 @@ def test_ha_light_color_temp_and_scene_white():
     assert (o["R"], o["G"], o["B"], o["M"]) == (0, 100, 0, 0)
     b.engine.cycle(1.0); b.block_cmd("luz", "Temp", 80); b.engine.cycle(1.0); o = b.engine.out["luz"]
     assert (o["Ct"], o["K"], o["O"]) == (1, 80, 1)
+
+
+def test_app_no_duplicate_light_card_and_page_fallback():
+    p = light_project(["light.ida_luz"], remote=True)
+    b = Bridge(p, "/tmp/_t15.json", dry=True)            # la luz no tiene área en HA: cae a la página del editor
+    b.states["light.ida_luz"] = {"state": "on", "attributes": {"friendly_name": "Ida luz"}}
+    m = b.api_app()
+    assert [r["name"] for r in m["rooms"]] == ["P"] and len(m["rooms"][0]["controls"]) == 1 and m["rooms"][0]["controls"][0]["type"] == "ha-light"
