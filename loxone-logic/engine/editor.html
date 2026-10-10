@@ -332,7 +332,7 @@ function undo(d){const n=hi+d;if(n<0||n>=hist.length)return;hi=n;const o=JSON.pa
 /* ---------- cinta ---------- */
 const RIB={
  proyecto:[["Proyecto",[["💾","Guardar y desplegar",()=>save(),"save"],["↶","Deshacer",()=>undo(-1),"undo"],["↷","Rehacer",()=>undo(1),"redo"]]],
-           ["Archivo",[["⭳","Exportar",exportJson],["⭱","Importar",importJson]]],
+           ["Archivo",[["🗋","Nuevo (vaciar)",newProject],["⭳","Exportar",exportJson],["⭱","Importar",importJson]]],
            ["Vista",[["📱","Abrir la app",()=>window.open("app","_blank")],["◐","Tema claro/oscuro",toggleTheme],["⛶","Encuadrar todo",fit]]]],
  edicion:[["Portapapeles",[["✂","Cortar",()=>{copySel();delSel()},"sel"],["⧉","Copiar",copySel,"sel"],["⎘","Pegar",paste,"paste"]]],
           ["Selección",[["▦","Seleccionar todo",selAll],["✕","Eliminar",delSel,"sel"],["⌕","Buscar (Ctrl+F)",openSearch]]],
@@ -590,6 +590,9 @@ function align(m){const os=[...sel].map(obj).filter(Boolean);if(os.length<2)retu
   os.forEach(o=>{if(m==="x")o.x=v;else if(m==="y")o.y=v;else o.x=v-(world.querySelector(`.ob[data-id="${CSS.escape(o.id)}"]`)?.offsetWidth||0)});touch();fullRender()}
 function exportJson(){const a=el("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(toProject(),null,1)],{type:"application/json"}));a.download="proyecto-logica.json";a.click()}
 function importJson(){const i=el("input");i.type="file";i.accept=".json";i.onchange=async()=>{try{fromProject(JSON.parse(await i.files[0].text()));hist=[];hi=-1;pushHist();dirty=true;fullRender();fit();toast("Importado (aún sin guardar)")}catch(e){toast("JSON no válido",1)}};i.click()}
+
+function newProject(){if(!confirm("¿Vaciar todo el proyecto y empezar de cero? (Hasta que pulses Guardar y desplegar no se borra nada del sistema)"))return;
+  nextId=1;fromProject({pages:[{id:"p1",name:"Página 1"}],blocks:[],wires:[],consts:{},periphery:[],settings:{}});hist=[];hi=-1;pushHist();dirty=true;cur="p1";fullRender();toast("Proyecto vacío (aún sin guardar)")}
 
 /* ---------- páginas ---------- */
 function drawPages(){const b=$("#ptabs");b.innerHTML="";
